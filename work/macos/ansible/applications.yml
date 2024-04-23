@@ -1,0 +1,29 @@
+# List of applications to install with homebrew tap/cask
+cask_applications:
+  - iterm2
+  - slack
+  - openvpn-connect
+  - intellij-idea
+  - docker
+  - 1password
+  - microsoft-remote-desktop
+  - postman
+  - teamviewer
+  - google-chrome
+  - spotify
+  - docker
+  - visual-studio-code
+  - google-cloud-sdk
+  - steam
+
+core_applications:
+  - mas
+  - zsh
+  - kubernetes-cli
+  - node
+  - openjdk@8
+  - openjdk
+  - python@3.12
+  - python@3.7
+  - wget
+  - sqlite
