@@ -46,9 +46,6 @@ if prompt_for_confirmation; then
   brew install intellij-idea > /dev/null 2>&1
   echo "intellij idea installed"
 
-  brew install docker > /dev/null 2>&1
-  echo "docker installed"
-
   brew install 1password > /dev/null 2>&1
   echo "1password installed"
 
@@ -58,20 +55,11 @@ if prompt_for_confirmation; then
   brew install postman > /dev/null 2>&1
   echo "postman installed"
 
-  brew install teamviewer > /dev/null 2>&1
-  echo "teamviewer installed"
-
   brew install google-chrome > /dev/null 2>&1
   echo "google chrome installed"
 
-  brew install spotify > /dev/null 2>&1
-  echo "spotify installed"
-
   brew install visual-studio-code > /dev/null 2>&1
   echo "visual studio code installed"
-
-  brew install google-cloud-sdk > /dev/null 2>&1
-  echo "google cloud sdk installed"
 
   brew install kubernetes-cli > /dev/null 2>&1
   echo "kubernetes cli installed"
@@ -101,44 +89,6 @@ else
   echo "skipped"
 fi
 
-# setup dock
-echo "********** STEP 3. SETUP DOCK AND WALLPAPER **********"
-if prompt_for_confirmation; then
-  /usr/local/bin/dockutil --remove all --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/Google Chrome.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/Visual Studio Code.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/iterm.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/Intellij IDEA.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/System Settings.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "~/Downloads" --section others --view auto --display folder --no-restart > /dev/null 2>&1
-  /usr/libexec/PlistBuddy -c "Set :AllSpacesAndDisplays:Linked:Content:Choices:0:Provider com.apple.wallpaper.choice.sonoma" ~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
-  /usr/libexec/PlistBuddy -c "Set :SystemDefault:Linked:Content:Choices:0:Provider com.apple.wallpaper.choice.sonoma" ~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
-  killall Dock > /dev/null 2>&1
-  echo ""
-else
-  echo "skipped"
-fi
-
-# setup terminal
-# todo: instruct to open iterm2 and install colors and maybe do this step as last step
-echo "********** SETUP TERMINAL **********"
-if prompt_for_confirmation; then
-  sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
-  NEW_THEME="powerlevel10k/powerlevel10k" 
-  ZSHRC_PATH="$HOME/.zshrc"
-  if grep -q '^ZSH_THEME=' "$ZSHRC_PATH"; then
-    sed -i.bak "s|^ZSH_THEME=.*|ZSH_THEME=\"$NEW_THEME\"|" "$ZSHRC_PATH"
-  else
-    echo "ZSH_THEME=\"$NEW_THEME\"" >> "$ZSHRC_PATH"
-  fi
-  zsh -c "source $ZSHRC_PATH"
-  wget -O ~/Downloads/MaterialDesignColors.itermcolors https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/MaterialDesignColors.itermcolors
-  echo ""
-else
-  echo "skipped"
-fi
-
 # create folders
 echo "********** CREATE FOLDERS **********"
 if prompt_for_confirmation; then
@@ -156,13 +106,13 @@ else
 fi
 
 # download and apply dotfiles and application files
-# todo: dont kill all at the end
 echo "********** DOWNLOAD DOTFILES AND APPLICATION CONFIG FILES **********"
 if prompt_for_confirmation; then
-  git clone https://github.com/orma5/workstation-setup.git ~/Downloads/tmp > /dev/null 2>&1
-  cp ~/Downloads/tmp/work/macos/dotfiles/.gitconfig ~/.gitconfig
-  cp ~/Downloads/tmp/work/macos/dotfiles/.global-gitignore ~/.global-gitignore
+  git clone https://github.com/orma5/workstation-setup.git ~/Development/tmp > /dev/null 2>&1
+  cp ~/Development/tmp/work/macos/dotfiles/.gitconfig ~/.gitconfig
+  cp ~/Development/tmp/work/macos/dotfiles/.global-gitignore ~/.global-gitignore
   rm -rf ~/Downloads/tmp/
+  mkdir ~/Development/tmp
   echo ""
 else
   echo "skipped"
@@ -180,8 +130,12 @@ if prompt_for_confirmation; then
   read
   echo "open slack and log in and press enter when done"
   read
-  echo ""
-
+  echo "open postman and login and press enter when done"
+  read
+  echo "open intellij and login and install material colors and press enter when done"
+  read
+  echo "open microsoft remote desktop and add qlikview, kbs and as controller and press enter when done"
+  read
 else
   echo "skipped"
 fi
@@ -463,8 +417,54 @@ if prompt_for_confirmation; then
   read
   echo "setup database credentials in IDE and press enter when done"
   read
+  echo "import profile(s) to vscode and press enter when done"
+  read
+  echo "download kube config files and press enter when done"
+  read
+else
+  echo "skipped"
+fi
 
 
+
+# setup dock
+echo "********** STEP 3. SETUP DOCK AND WALLPAPER **********"
+if prompt_for_confirmation; then
+  /usr/local/bin/dockutil --remove all --no-restart > /dev/null 2>&1
+  /usr/local/bin/dockutil --add "/Applications/Google Chrome.app" --no-restart > /dev/null 2>&1
+  /usr/local/bin/dockutil --add "/Applications/Visual Studio Code.app" --no-restart > /dev/null 2>&1
+  /usr/local/bin/dockutil --add "/Applications/iterm.app" --no-restart > /dev/null 2>&1
+  /usr/local/bin/dockutil --add "/Applications/Intellij IDEA.app" --no-restart > /dev/null 2>&1
+  /usr/local/bin/dockutil --add "/Applications/System Settings.app" --no-restart > /dev/null 2>&1
+  /usr/local/bin/dockutil --add "~/Downloads" --section others --view auto --display folder --no-restart > /dev/null 2>&1
+  /usr/libexec/PlistBuddy -c "Set :AllSpacesAndDisplays:Linked:Content:Choices:0:Provider com.apple.wallpaper.choice.sonoma" ~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
+  /usr/libexec/PlistBuddy -c "Set :SystemDefault:Linked:Content:Choices:0:Provider com.apple.wallpaper.choice.sonoma" ~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
+  killall Dock > /dev/null 2>&1
+  echo ""
+else
+  echo "skipped"
+fi
+
+# setup terminal
+echo "********** SETUP TERMINAL **********"
+if prompt_for_confirmation; then
+  sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+  NEW_THEME="powerlevel10k/powerlevel10k" 
+  ZSHRC_PATH="$HOME/.zshrc"
+  if grep -q '^ZSH_THEME=' "$ZSHRC_PATH"; then
+    sed -i.bak "s|^ZSH_THEME=.*|ZSH_THEME=\"$NEW_THEME\"|" "$ZSHRC_PATH"
+  else
+    echo "ZSH_THEME=\"$NEW_THEME\"" >> "$ZSHRC_PATH"
+  fi
+  zsh -c "source $ZSHRC_PATH"
+  wget -O ~/Downloads/MaterialDesignColors.itermcolors https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/MaterialDesignColors.itermcolors
+  echo "open iterm and setup colors, fonts and terminal size and press enter when done"
+  read
+  echo ""
+else
+  echo "skipped"
+fi
 
 echo "********** SETUP COMPLETE **********"
 echo "Press any key to reboot computer"
