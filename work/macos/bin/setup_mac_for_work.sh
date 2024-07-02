@@ -23,16 +23,16 @@ echo ""
 sudo -v
 
 # install homebrew with xcode clt
-echo "********** STEP 1. DOWNLOAD AND INSTALL HOMEBREW WITH XCODE COMMAND LINE TOOLS **********"
+echo "********** DOWNLOAD AND INSTALL HOMEBREW WITH XCODE COMMAND LINE TOOLS **********"
 if prompt_for_confirmation; then
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   echo ""
 else
-  echo "skipping STEP 1."
+  echo "skipped"
 fi
 
 # install applications
-echo "********** STEP 2. DOWNLOAD AND INSTALL APPLICATIONS USING HOMEBREW **********"
+echo "********** DOWNLOAD AND INSTALL APPLICATIONS USING HOMEBREW **********"
 if prompt_for_confirmation; then
   brew install iterm2 > /dev/null 2>&1
   echo "iterm2 installed"
@@ -98,7 +98,7 @@ if prompt_for_confirmation; then
   echo "dockutil installed"
   echo ""
 else 
-  echo "skipping STEP 2."
+  echo "skipped"
 fi
 
 # setup dock
@@ -116,12 +116,12 @@ if prompt_for_confirmation; then
   killall Dock > /dev/null 2>&1
   echo ""
 else
-  echo "skipping STEP 3."
+  echo "skipped"
 fi
 
 # setup terminal
 # todo: instruct to open iterm2 and install colors and maybe do this step as last step
-echo "********** STEP 4. SETUP TERMINAL **********"
+echo "********** SETUP TERMINAL **********"
 if prompt_for_confirmation; then
   sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
   git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
@@ -134,12 +134,13 @@ if prompt_for_confirmation; then
   fi
   zsh -c "source $ZSHRC_PATH"
   wget -O ~/Downloads/MaterialDesignColors.itermcolors https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/MaterialDesignColors.itermcolors
+  echo ""
 else
-  echo "skipping step 4."
+  echo "skipped"
 fi
 
 # create folders
-echo "********** STEP 5. CREATE FOLDERS **********"
+echo "********** CREATE FOLDERS **********"
 if prompt_for_confirmation; then
   mkdir ~/Development
   echo "Created Development folder"
@@ -151,36 +152,286 @@ if prompt_for_confirmation; then
   echo "Created Development/tmp folder"
   echo ""
 else
-  echo "skipping STEP 5."
+  echo "skipped"
 fi
 
 # download and apply dotfiles and application files
 # todo: dont kill all at the end
-echo "********** STEP 6. DOWNLOAD AND APPLY DOTFILES AND APPLICATION CONFIG FILES **********"
+echo "********** DOWNLOAD DOTFILES AND APPLICATION CONFIG FILES **********"
 if prompt_for_confirmation; then
   git clone https://github.com/orma5/workstation-setup.git ~/Downloads/tmp > /dev/null 2>&1
-  cp ~/Downloads/tmp/work/macos/dotfiles/.macos ~/.macos
   cp ~/Downloads/tmp/work/macos/dotfiles/.gitconfig ~/.gitconfig
   cp ~/Downloads/tmp/work/macos/dotfiles/.global-gitignore ~/.global-gitignore
-  yes | source ~/.macos > /dev/null 2>&1
   rm -rf ~/Downloads/tmp/
   echo ""
 else
-  echo "skipping STEP 6."
+  echo "skipped"
 fi
 
-echo "********** STEP 7. SETUP OPENVPN **********"
+echo "********** APPLICATION SETUP **********"
 if prompt_for_confirmation; then
+  open open /Applications/1Password.app
+  echo "login to 1password and press enter when done"
+  read
+  open /Applications/Google\ Chrome.app
+  echo "login to google and press enter when done"
+  read 
   echo "login to openvpn and fetch file and add to openvpn to login and press enter when done"
   read
+  echo "open slack and log in and press enter when done"
+  read
+  echo ""
+
 else
-  echo "skipping step 7."
+  echo "skipped"
 fi
 
-echo "********** STEP 7. CREATE SSH KEY AND ADD TO ONLINE APPLICATIONS AND GENERATE HOSTS CONFIG **********"
+echo "********** MACOS SETUP **********"
 if prompt_for_confirmation; then
-  ssh-keygen -f ~/.ssh/work-ed25519 -C "per-olof.markstrom@footway.com"
-  ssh-keygen -f ~/.ssh/personal-ed25519 -C "po.markstrom@gmail.com"
+  
+  # Save to disk (not to iCloud) by default
+  defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false
+
+  # Automatically quit printer app once the print jobs complete
+  defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
+
+  # Disable the “Are you sure you want to open this application?” dialog
+  defaults write com.apple.LaunchServices LSQuarantine -bool false
+
+  # Trackpad: enable tap to click for this user and for the login screen
+  defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
+  defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+  defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+
+  # Increase sound quality for Bluetooth headphones/headsets
+  defaults write com.apple.BluetoothAudioAgent "Apple Bitpool Min (editable)" -int 40
+
+  # Enable full keyboard access for all controls
+  # (e.g. enable Tab in modal dialogs)
+  defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
+
+  # Use scroll gesture with the Ctrl (^) modifier key to zoom
+  defaults write com.apple.universalaccess closeViewScrollWheelToggle -bool true
+  defaults write com.apple.universalaccess HIDScrollZoomModifierMask -int 262144
+
+  # Follow the keyboard focus while zoomed in
+  defaults write com.apple.universalaccess closeViewZoomFollowsFocus -bool true
+
+  # Disable press-and-hold for keys in favor of key repeat
+  defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+
+  # Set a blazingly fast keyboard repeat rate
+  defaults write NSGlobalDomain KeyRepeat -int 1
+  defaults write NSGlobalDomain InitialKeyRepeat -int 10
+
+  # Stop iTunes from responding to the keyboard media keys
+  launchctl unload -w /System/Library/LaunchAgents/com.apple.rcd.plist 2> /dev/null
+
+  # Enable lid wakeup
+  sudo pmset -a lidwake 1
+
+  # Sleep the display after 15 minutes
+  sudo pmset -a displaysleep 15
+
+  # Disable machine sleep while charging
+  sudo pmset -c sleep 0
+
+  # Set machine sleep to 5 minutes on battery
+  sudo pmset -b sleep 5
+
+  # Set standby delay to 24 hours (default is 1 hour)
+  sudo pmset -a standbydelay 86400
+
+  # Never go into computer sleep mode
+  sudo systemsetup -setcomputersleep Off > /dev/null
+
+  # Hibernation mode
+  # 0: Disable hibernation (speeds up entering sleep mode)
+  # 3: Copy RAM to disk so the system state can still be restored in case of a
+  #    power failure.
+  sudo pmset -a hibernatemode 0
+
+  # Remove the sleep image file to save disk space
+  sudo rm /private/var/vm/sleepimage
+  # Create a zero-byte file instead…
+  sudo touch /private/var/vm/sleepimage
+  # …and make sure it can’t be rewritten
+  sudo chflags uchg /private/var/vm/sleepimage
+
+  # Require password immediately after sleep or screen saver begins
+  defaults write com.apple.screensaver askForPassword -int 1
+  defaults write com.apple.screensaver askForPasswordDelay -int 0
+
+  # Save screenshots to the desktop
+  defaults write com.apple.screencapture location -string "${HOME}/Desktop"
+
+  # Save screenshots in PNG format (other options: BMP, GIF, JPG, PDF, TIFF)
+  defaults write com.apple.screencapture type -string "png"
+
+  # Disable shadow in screenshots
+  defaults write com.apple.screencapture disable-shadow -bool true
+
+  # Enable subpixel font rendering on non-Apple LCDs
+  # Reference: https://github.com/kevinSuttle/macOS-Defaults/issues/17#issuecomment-266633501
+  defaults write NSGlobalDomain AppleFontSmoothing -int 1
+
+  # Enable HiDPI display modes (requires restart)
+  sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool true
+
+  # Finder: allow quitting via ⌘ + Q; doing so will also hide desktop icons
+  defaults write com.apple.finder QuitMenuItem -bool true
+
+  # Finder: disable window animations and Get Info animations
+  defaults write com.apple.finder DisableAllAnimations -bool true
+
+  # Set Desktop as the default location for new Finder windows
+  # For other paths, use `PfLo` and `file:///full/path/here/`
+  defaults write com.apple.finder NewWindowTarget -string "PfDe"
+  defaults write com.apple.finder NewWindowTargetPath -string "file://${HOME}/Desktop/"
+
+  # Show icons for hard drives, servers, and removable media on the desktop
+  defaults write com.apple.finder ShowExternalHardDrivesOnDesktop -bool true
+  defaults write com.apple.finder ShowHardDrivesOnDesktop -bool true
+  defaults write com.apple.finder ShowMountedServersOnDesktop -bool true
+  defaults write com.apple.finder ShowRemovableMediaOnDesktop -bool true
+
+  # Finder: show hidden files by default
+  defaults write com.apple.finder AppleShowAllFiles -bool true
+
+  # Finder: show all filename extensions
+  defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+
+  # Finder: show status bar
+  defaults write com.apple.finder ShowStatusBar -bool true
+
+  # Finder: show path bar
+  defaults write com.apple.finder ShowPathbar -bool true
+
+  # Display full POSIX path as Finder window title
+  defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
+
+  # Keep folders on top when sorting by name
+  defaults write com.apple.finder _FXSortFoldersFirst -bool true
+
+  # When performing a search, search the current folder by default
+  defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
+
+  # Disable the warning when changing a file extension
+  defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
+
+  # Enable spring loading for directories
+  defaults write NSGlobalDomain com.apple.springing.enabled -bool true
+
+  # Remove the spring loading delay for directories
+  defaults write NSGlobalDomain com.apple.springing.delay -float 0
+
+  # Avoid creating .DS_Store files on network or USB volumes
+  defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
+  defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
+
+  # Disable disk image verification
+  defaults write com.apple.frameworks.diskimages skip-verify -bool true
+  defaults write com.apple.frameworks.diskimages skip-verify-locked -bool true
+  defaults write com.apple.frameworks.diskimages skip-verify-remote -bool true
+
+  # Automatically open a new Finder window when a volume is mounted
+  defaults write com.apple.frameworks.diskimages auto-open-ro-root -bool true
+  defaults write com.apple.frameworks.diskimages auto-open-rw-root -bool true
+  defaults write com.apple.finder OpenWindowForNewRemovableDisk -bool true
+
+  # Use list view in all Finder windows by default
+  # Four-letter codes for the other view modes: `icnv`, `clmv`, `glyv`
+  defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
+
+  # Disable the warning before emptying the Trash
+  defaults write com.apple.finder WarnOnEmptyTrash -bool false
+
+  # Show the ~/Library folder
+  chflags nohidden ~/Library && xattr -d com.apple.FinderInfo ~/Library
+
+  # Show the /Volumes folder
+  sudo chflags nohidden /Volumes
+
+  # Expand the following File Info panes:
+  # “General”, “Open with”, and “Sharing & Permissions”
+  defaults write com.apple.finder FXInfoPanesExpanded -dict \
+    General -bool true \
+    OpenWith -bool true \
+    Privileges -bool true
+  
+  # Set the icon size of Dock items to 36 pixels
+  defaults write com.apple.dock tilesize -int 36
+
+  # Minimize windows into their application’s icon
+  defaults write com.apple.dock minimize-to-application -bool true
+
+  # Show indicator lights for open applications in the Dock
+  defaults write com.apple.dock show-process-indicators -bool true
+
+  # Disable Dashboard
+  defaults write com.apple.dashboard mcx-disabled -bool true
+
+  # Don’t show Dashboard as a Space
+  defaults write com.apple.dock dashboard-in-overlay -bool true
+
+  # Don’t automatically rearrange Spaces based on most recent use
+  defaults write com.apple.dock mru-spaces -bool false
+
+  # Don’t show recent applications in Dock
+  defaults write com.apple.dock show-recents -bool false
+
+  # Don’t display the annoying prompt when quitting iTerm
+  defaults write com.googlecode.iterm2 PromptOnQuit -bool false
+
+  # Don’t display the annoying prompt when quitting iTerm
+  defaults write com.googlecode.iterm2 PromptOnQuit -bool false
+
+  # Show the main window when launching Activity Monitor
+  defaults write com.apple.ActivityMonitor OpenMainWindow -bool true
+
+  # Visualize CPU usage in the Activity Monitor Dock icon
+  defaults write com.apple.ActivityMonitor IconType -int 5
+
+  # Show all processes in Activity Monitor
+  defaults write com.apple.ActivityMonitor ShowCategory -int 0
+
+  # Sort Activity Monitor results by CPU usage
+  defaults write com.apple.ActivityMonitor SortColumn -string "CPUUsage"
+  defaults write com.apple.ActivityMonitor SortDirection -int 0
+
+  # Enable the debug menu in Disk Utility
+  defaults write com.apple.DiskUtility DUDebugMenuEnabled -bool true
+  defaults write com.apple.DiskUtility advanced-image-options -bool true
+
+  # Disable the all too sensitive backswipe on trackpads
+  defaults write com.google.Chrome AppleEnableSwipeNavigateWithScrolls -bool false
+  defaults write com.google.Chrome.canary AppleEnableSwipeNavigateWithScrolls -bool false
+
+  # Disable the all too sensitive backswipe on Magic Mouse
+  defaults write com.google.Chrome AppleEnableMouseSwipeNavigateWithScrolls -bool false
+  defaults write com.google.Chrome.canary AppleEnableMouseSwipeNavigateWithScrolls -bool false
+
+  # Use the system-native print preview dialog
+  defaults write com.google.Chrome DisablePrintPreview -bool true
+  defaults write com.google.Chrome.canary DisablePrintPreview -bool true
+
+  # Expand the print dialog by default
+  defaults write com.google.Chrome PMPrintingExpandedStateForPrint2 -bool true
+  defaults write com.google.Chrome.canary PMPrintingExpandedStateForPrint2 -bool true
+
+  echo "setup top bar to include sound, displays, bluetooth and  press enter when done"
+  read
+  echo "update desktop background and press enter when done"
+  read
+else
+  echo "skipped"
+fi
+
+
+echo "********** SETUP SSH (KEYS, ROOT CERTIFICATES, LOGINS, CONFIG) **********"
+if prompt_for_confirmation; then
+  ssh-keygen -t rsa -C "per-olof.markstrom@footway.com" -b 4096
+  ssh-keygen -C "po.markstrom@gmail.com"
   echo "Add generated work public key to gitlab and press enter when done"
   read
   echo "Add generated personal public key to github and press enter when done"
@@ -189,12 +440,34 @@ if prompt_for_confirmation; then
   read
   echo "Donwload hosts config and press enter when done"
 else
-  echo "skipping step 7."
+  echo "skipped"
 fi
+
+echo "********** CLONE DEVELOPMENT PROJECTS **********"
+if prompt_for_confirmation; then
+  echo "clone projects from gitlab/github and press enter when done"
+  read
+else
+  echo "skipped"
+fi
+
+echo "********** SETUP DEVELOPMENT ENVIRONMENTS **********"
+if prompt_for_confirmation; then
+  echo "download python versions for fwms and press enter when done"
+  read
+  echo "create virtual environment for fwms and scripts and press enter when done"
+  read
+  echo "pip install for each development project and press enter when done"
+  read
+  echo "setup config and env files for python and java projects and press enter when done"
+  read
+  echo "setup database credentials in IDE and press enter when done"
+  read
+
 
 
 echo "********** SETUP COMPLETE **********"
 echo "Press any key to reboot computer"
 read
-sudo rebootß
+sudo reboot
 
