@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Function to prompt the user and check for 'y' or 'n'
+# Function to prompt the user and check for 'y' or 'n' VERIFIED
 prompt_for_confirmation() {
     while true; do
         read -p "Do you want to run this step? (Y/n) [default: y]: " yn
@@ -22,44 +22,57 @@ echo "********** SETTING UP MAC FOR WORK **********"
 echo ""
 sudo -v
 
-# install homebrew with xcode clt
+#keep sudo alive VERIFIED
+while true; do sudo -n true; sleep 60; done 2>/dev/null &
+
+# install homebrew with xcode clt VERIFIED
 echo "********** DOWNLOAD AND INSTALL HOMEBREW WITH XCODE COMMAND LINE TOOLS **********"
 if prompt_for_confirmation; then
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  #put brew on path
+  echo >> /Users/po/.zprofile
+  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/po/.zprofile
+  eval "$(/opt/homebrew/bin/brew shellenv)"
   echo ""
 else
   echo "skipped"
 fi
 
-# install applications
+# install applications VERIFIED
 echo "********** DOWNLOAD AND INSTALL APPLICATIONS USING HOMEBREW **********"
 if prompt_for_confirmation; then
-  brew install iterm2 > /dev/null 2>&1
+  brew install --cask iterm2 > /dev/null 2>&1
   echo "iterm2 installed"
 
-  brew install slack > /dev/null 2>&1
+  brew install --cask slack > /dev/null 2>&1
   echo "slack installed"
 
-  brew install openvpn-connect > /dev/null 2>&1
+  brew install --cask openvpn-connect > /dev/null 2>&1
   echo "openvpn installed"
 
-  brew install intellij-idea > /dev/null 2>&1
+  brew install --cask intellij-idea > /dev/null 2>&1
   echo "intellij idea installed"
 
-  brew install 1password > /dev/null 2>&1
+  brew install --cask 1password > /dev/null 2>&1
   echo "1password installed"
 
-  brew install microsoft-remote-desktop > /dev/null 2>&1
-  echo "microsoft remote desktop installed"
+  brew install --cask 1password-cli > /dev/null 2>&1
+  echo "1password-cli installed"
 
-  brew install postman > /dev/null 2>&1
+  brew install --cask windows-app > /dev/null 2>&1
+  echo "windows app installed"
+
+  brew install --cask postman > /dev/null 2>&1
   echo "postman installed"
 
-  brew install google-chrome > /dev/null 2>&1
+  brew install --cask google-chrome > /dev/null 2>&1
   echo "google chrome installed"
 
-  brew install visual-studio-code > /dev/null 2>&1
+  brew install --cask visual-studio-code > /dev/null 2>&1
   echo "visual studio code installed"
+
+  brew install --cask teamviewer > /dev/null 2>&1
+  echo "teamviewer installed"
 
   brew install kubernetes-cli > /dev/null 2>&1
   echo "kubernetes cli installed"
@@ -67,11 +80,11 @@ if prompt_for_confirmation; then
   brew install node > /dev/null 2>&1
   echo "node installed"
 
-  brew install openjdk@8 > /dev/null 2>&1
+  brew install openjdk@21 > /dev/null 2>&1
   echo "openjdk 8 installed"
 
-  brew install openjdk > /dev/null 2>&1
-  echo "openjdk installed"
+  brew install pipenv > /dev/null 2>&1
+  echo "pipenv installed"
 
   brew install pyenv > /dev/null 2>&1
   echo "pyenv installed"
@@ -84,12 +97,16 @@ if prompt_for_confirmation; then
 
   brew install dockutil > /dev/null 2>&1
   echo "dockutil installed"
+
+  brew install awscli > /dev/null 2>&1
+  echo "aws cli installed"
   echo ""
+
 else 
   echo "skipped"
 fi
 
-# create folders
+# create folders VERIFIED
 echo "********** CREATE FOLDERS **********"
 if prompt_for_confirmation; then
   mkdir ~/Development
@@ -105,14 +122,12 @@ else
   echo "skipped"
 fi
 
-# download and apply dotfiles and application files
+# download and apply dotfiles and application files VERIFIED
 echo "********** DOWNLOAD DOTFILES AND APPLICATION CONFIG FILES **********"
 if prompt_for_confirmation; then
-  git clone https://github.com/orma5/workstation-setup.git ~/Development/tmp > /dev/null 2>&1
-  cp ~/Development/tmp/work/macos/dotfiles/.gitconfig ~/.gitconfig
-  cp ~/Development/tmp/work/macos/dotfiles/.global-gitignore ~/.global-gitignore
-  rm -rf ~/Downloads/tmp/
-  mkdir ~/Development/tmp
+  git clone https://github.com/orma5/workstation-setup.git ~/Development/Scripts/workstation-setup > /dev/null 2>&1
+  cp ~/Development/Scripts/workstation-setup/work/macos/dotfiles/.gitconfig ~/.gitconfig
+  cp ~/Development/Scripts/workstation-setup/work/macos/dotfiles/.global-gitignore ~/.global-gitignore
   echo ""
 else
   echo "skipped"
@@ -120,21 +135,69 @@ fi
 
 echo "********** APPLICATION SETUP **********"
 if prompt_for_confirmation; then
-  open open /Applications/1Password.app
-  echo "login to 1password and press enter when done"
+
+  # 1Password
+  echo "loging in to 1password"
+  op account add --address "https://my.1password.com"
+
+  # google chrome
+  echo "press any key to open chrome. Log in and return here and press enter"
   read
-  open /Applications/Google\ Chrome.app
-  echo "login to google and press enter when done"
-  read 
-  echo "login to openvpn and fetch file and add to openvpn to login and press enter when done"
+  open -a "Google Chrome"
+  echo "press enter when done"
   read
-  echo "open slack and log in and press enter when done"
+
+  # open vpn
+  echo "Fetching credentials for OpenVPN"
+  echo "Enter the name of the 1Password item for OpenVPN:"
+  read VPN_ITEM_NAME
+  echo "Enter the OpenVPN server name:"
+  read VPN_SERVER_NAME
+
+  # Fetch credentials from 1Password
+  VPN_USERNAME=$(op item get "$VPN_ITEM_NAME" --field username)
+  VPN_PASSWORD=$(op item get "$VPN_ITEM_NAME" --reveal --field password)
+
+  # Check if credentials were retrieved
+  if [ -z "$VPN_USERNAME" ] || [ -z "$VPN_PASSWORD" ]; then
+    echo "Failed to fetch credentials from 1Password. Please check the item name and try again."
+  else
+    # Download configuration file
+    wget --user="$VPN_USERNAME" --password="$VPN_PASSWORD" --no-check-certificate "https://$VPN_SERVER_NAME:943/rest/GetUserlogin" -O ~/Download/client.ovpn
+
+    if [ $? -eq 0 ]; then
+      echo "Configuration downloaded as 'client.ovpn'."
+    else
+      echo "Failed to download the OpenVPN config file. Please download it manually."
+    fi
+  fi
+
+  # SLACK
+  echo "press any key to open Slack to login"
   read
-  echo "open postman and login and press enter when done"
+  open -a "Slack"
+  echo "press enter when done"
   read
-  echo "open intellij and login and install material colors and press enter when done"
+
+  # Postman
+  echo "press any key to open Postman to login"
   read
-  echo "open microsoft remote desktop and add qlikview, kbs and as controller and press enter when done"
+  open -a "Postman"
+  echo "press enter when done"
+  read
+
+  # IntelliJ
+  echo "press any key to open IntelliJ to login and install material colors theme"
+  read
+  open -a "IntelliJ IDEA"
+  echo "press enter when done"
+  read
+
+  # 
+  echo "press any key to open remote desktop and add connections"
+  read
+  open -a "Windows App"
+  echo "press enter when done"
   read
 else
   echo "skipped"
@@ -163,13 +226,6 @@ if prompt_for_confirmation; then
   # Enable full keyboard access for all controls
   # (e.g. enable Tab in modal dialogs)
   defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
-
-  # Use scroll gesture with the Ctrl (^) modifier key to zoom
-  defaults write com.apple.universalaccess closeViewScrollWheelToggle -bool true
-  defaults write com.apple.universalaccess HIDScrollZoomModifierMask -int 262144
-
-  # Follow the keyboard focus while zoomed in
-  defaults write com.apple.universalaccess closeViewZoomFollowsFocus -bool true
 
   # Disable press-and-hold for keys in favor of key repeat
   defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
@@ -409,7 +465,7 @@ echo "********** SETUP DEVELOPMENT ENVIRONMENTS **********"
 if prompt_for_confirmation; then
   echo "download python versions for fwms and press enter when done"
   read
-  echo "create virtual environment for fwms and scripts and press enter when done"
+  echo "create virtual environment for projects and scripts and press enter when done"
   read
   echo "pip install for each development project and press enter when done"
   read
@@ -430,13 +486,13 @@ fi
 # setup dock
 echo "********** STEP 3. SETUP DOCK AND WALLPAPER **********"
 if prompt_for_confirmation; then
-  /usr/local/bin/dockutil --remove all --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/Google Chrome.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/Visual Studio Code.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/iterm.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/Intellij IDEA.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "/Applications/System Settings.app" --no-restart > /dev/null 2>&1
-  /usr/local/bin/dockutil --add "~/Downloads" --section others --view auto --display folder --no-restart > /dev/null 2>&1
+  dockutil --remove all --no-restart > /dev/null 2>&1
+  dockutil --add "/Applications/Google Chrome.app" --no-restart > /dev/null 2>&1
+  dockutil --add "/Applications/Visual Studio Code.app" --no-restart > /dev/null 2>&1
+  dockutil --add "/Applications/iterm.app" --no-restart > /dev/null 2>&1
+  dockutil --add "/Applications/Intellij IDEA.app" --no-restart > /dev/null 2>&1
+  dockutil --add "/Applications/System Settings.app" --no-restart > /dev/null 2>&1
+  dockutil --add "~/Downloads" --section others --view auto --display folder --no-restart > /dev/null 2>&1
   /usr/libexec/PlistBuddy -c "Set :AllSpacesAndDisplays:Linked:Content:Choices:0:Provider com.apple.wallpaper.choice.sonoma" ~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
   /usr/libexec/PlistBuddy -c "Set :SystemDefault:Linked:Content:Choices:0:Provider com.apple.wallpaper.choice.sonoma" ~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
   killall Dock > /dev/null 2>&1
