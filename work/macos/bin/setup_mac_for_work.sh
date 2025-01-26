@@ -74,6 +74,9 @@ if prompt_for_confirmation; then
   brew install --cask teamviewer > /dev/null 2>&1
   echo "teamviewer installed"
 
+  brew install --cask windsurf > /dev/null 2>&1
+  echo "windsurf installed"
+
   brew install kubernetes-cli > /dev/null 2>&1
   echo "kubernetes cli installed"
 
@@ -91,9 +94,6 @@ if prompt_for_confirmation; then
 
   brew install wget > /dev/null 2>&1
   echo "wget installed"
-
-  brew install sqlite > /dev/null 2>&1
-  echo "sqlite installed"
 
   brew install dockutil > /dev/null 2>&1
   echo "dockutil installed"
@@ -193,7 +193,7 @@ if prompt_for_confirmation; then
   echo "press enter when done"
   read
 
-  # 
+  # windows app
   echo "press any key to open remote desktop and add connections"
   read
   open -a "Windows App"
