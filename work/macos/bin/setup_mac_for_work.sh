@@ -5,13 +5,13 @@ prompt_for_confirmation() {
     while true; do
         read -p "Do you want to run this step? (Y/n) [default: y]: " yn
         case $yn in
-            [Yy]* | "" ) 
+            [Yy]* | "" )
                 return 0  # Exit the function and allow the code block to run
                 ;;
-            [Nn]* ) 
+            [Nn]* )
                 return 1  # Exit the function and skip the code block
                 ;;
-            * ) 
+            * )
                 echo "Please answer y or n."
                 ;;
         esac
@@ -74,8 +74,8 @@ if prompt_for_confirmation; then
   brew install --cask teamviewer > /dev/null 2>&1
   echo "teamviewer installed"
 
-  brew install --cask windsurf > /dev/null 2>&1
-  echo "windsurf installed"
+  brew install aider > /dev/null 2>&1
+  echo "aider installed"
 
   brew install kubernetes-cli > /dev/null 2>&1
   echo "kubernetes cli installed"
@@ -84,7 +84,7 @@ if prompt_for_confirmation; then
   echo "node installed"
 
   brew install openjdk@21 > /dev/null 2>&1
-  echo "openjdk 8 installed"
+  echo "openjdk 21 installed"
 
   brew install pipenv > /dev/null 2>&1
   echo "pipenv installed"
@@ -102,7 +102,7 @@ if prompt_for_confirmation; then
   echo "aws cli installed"
   echo ""
 
-else 
+else
   echo "skipped"
 fi
 
@@ -205,7 +205,7 @@ fi
 
 echo "********** MACOS SETUP **********"
 if prompt_for_confirmation; then
-  
+
   # Save to disk (not to iCloud) by default
   defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false
 
@@ -368,7 +368,7 @@ if prompt_for_confirmation; then
     General -bool true \
     OpenWith -bool true \
     Privileges -bool true
-  
+
   # Set the icon size of Dock items to 36 pixels
   defaults write com.apple.dock tilesize -int 36
 
@@ -440,15 +440,42 @@ fi
 
 echo "********** SETUP SSH (KEYS, ROOT CERTIFICATES, LOGINS, CONFIG) **********"
 if prompt_for_confirmation; then
-  ssh-keygen -t rsa -C "per-olof.markstrom@footway.com" -b 4096
-  ssh-keygen -C "po.markstrom@gmail.com"
-  echo "Add generated work public key to gitlab and press enter when done"
+  # Prompt for work email and generate work SSH key
+  read -p "Enter your work email (for GitLab): " WORK_EMAIL
+  ssh-keygen -t rsa -C "$WORK_EMAIL" -b 4096
+
+  # Prompt for GitHub email and generate personal SSH key
+  read -p "Enter your personal email (for GitHub): " PERSONAL_EMAIL
+  ssh-keygen -C "$PERSONAL_EMAIL"
+
+  echo "Add generated work public key to GitLab and press enter when done"
   read
-  echo "Add generated personal public key to github and press enter when done"
+  echo "Add generated personal public key to GitHub and press enter when done"
   read
-  echo "Donwload root certificate and press enter when done"
+  echo "Download root certificate and press enter when done"
   read
-  echo "Donwload hosts config and press enter when done"
+  echo "Download hosts config and press enter when done"
+  read
+  echo "Create kubeconfig using AWS CLI"
+  read
+  aws configure
+
+  # Prompt for EKS cluster config (region is omitted)
+  read -p "Enter the EKS cluster name: " CLUSTER_NAME
+  if [ -z "$CLUSTER_NAME" ]; then
+    echo "❌ Cluster name cannot be empty."
+    exit 1
+  fi
+
+  echo "⏳ Updating kubeconfig for cluster: $CLUSTER_NAME using default AWS region..."
+  aws eks update-kubeconfig --name "$CLUSTER_NAME"
+
+  if [ $? -eq 0 ]; then
+    echo "✅ kubeconfig updated successfully."
+  else
+    echo "❌ Failed to update kubeconfig."
+  fi
+
 else
   echo "skipped"
 fi
@@ -463,8 +490,10 @@ fi
 
 echo "********** SETUP DEVELOPMENT ENVIRONMENTS **********"
 if prompt_for_confirmation; then
-  echo "download python versions for fwms and press enter when done"
-  read
+  echo "Downloading python versions"
+  pyenv install 3.7.17
+  pyenv install $(pyenv install --list | grep -E "^\s*[0-9]+\.[0-9]+\.[0-9]+$" | grep -v - | tail -1)
+  echo ""
   echo "create virtual environment for projects and scripts and press enter when done"
   read
   echo "pip install for each development project and press enter when done"
@@ -475,13 +504,9 @@ if prompt_for_confirmation; then
   read
   echo "import profile(s) to vscode and press enter when done"
   read
-  echo "download kube config files and press enter when done"
-  read
 else
   echo "skipped"
 fi
-
-
 
 # setup dock
 echo "********** STEP 3. SETUP DOCK AND WALLPAPER **********"
@@ -506,7 +531,7 @@ echo "********** SETUP TERMINAL **********"
 if prompt_for_confirmation; then
   sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
   git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
-  NEW_THEME="powerlevel10k/powerlevel10k" 
+  NEW_THEME="powerlevel10k/powerlevel10k"
   ZSHRC_PATH="$HOME/.zshrc"
   if grep -q '^ZSH_THEME=' "$ZSHRC_PATH"; then
     sed -i.bak "s|^ZSH_THEME=.*|ZSH_THEME=\"$NEW_THEME\"|" "$ZSHRC_PATH"
@@ -526,4 +551,3 @@ echo "********** SETUP COMPLETE **********"
 echo "Press any key to reboot computer"
 read
 sudo reboot
-
