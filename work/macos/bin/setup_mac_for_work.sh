@@ -74,8 +74,8 @@ if prompt_for_confirmation; then
   brew install --cask teamviewer > /dev/null 2>&1
   echo "teamviewer installed"
 
-  brew install aider > /dev/null 2>&1
-  echo "aider installed"
+  brew install --cask claude-code > /dev/null 2>&1
+  echo "claude code installed"
 
   brew install kubernetes-cli > /dev/null 2>&1
   echo "kubernetes cli installed"
@@ -100,6 +100,10 @@ if prompt_for_confirmation; then
 
   brew install awscli > /dev/null 2>&1
   echo "aws cli installed"
+  echo ""
+
+  brew install --cask gcloud-cli > /dev/null 2>&1
+  echo "gcp cli installed"
   echo ""
 
 else
