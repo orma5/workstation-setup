@@ -7,7 +7,7 @@ set -euo pipefail
 
 GITHUB_REPO="orma5/workstation-setup"
 GITHUB_BRANCH="main"
-GITHUB_RAW_BASE="https://github.com/$GITHUB_REPO/$GITHUB_BRANCH"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH"
 TEMP_DIR="/tmp/workstation-setup"
 PYTHON_SCRIPT_PATH="$TEMP_DIR/main.py"
 UV_LOCAL_BIN="$HOME/.local/bin"
