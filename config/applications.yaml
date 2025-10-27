@@ -1,0 +1,29 @@
+# Homebrew Applications Configuration
+# This file contains all applications to be installed via Homebrew
+
+# Cask applications (GUI applications)
+casks:
+  - iterm2
+  - slack
+  - openvpn-connect
+  - intellij-idea
+  - 1password
+  - 1password-cli
+  - windows-app
+  - postman
+  - google-chrome
+  - visual-studio-code
+  - teamviewer
+  - claude-code
+  - gcloud-cli
+
+# Formula packages (CLI tools and libraries)
+formulae:
+  - kubernetes-cli
+  - node
+  - openjdk@21
+  - pipenv
+  - pyenv
+  - wget
+  - dockutil
+  - awscli

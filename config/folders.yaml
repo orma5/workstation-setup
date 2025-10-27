@@ -1,0 +1,8 @@
+# Directory Structure Configuration
+# This file contains all folders to be created for the development environment
+
+folders:
+  - ~/Development
+  - ~/Development/Projects
+  - ~/Development/Scripts
+  - ~/Development/tmp
