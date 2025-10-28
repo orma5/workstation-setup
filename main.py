@@ -433,7 +433,12 @@ def ensure_interactive_application_setup() -> None:
     for app in interactive_apps:
         display_name = app.get('display_name')
         bundle_id = app.get('bundle_id')
+        app_type = app.get('type')
         instructions = app.get('instructions', 'Please complete the setup')
+
+        # Skip automated apps (they have their own dedicated setup functions)
+        if app_type == 'automated':
+            continue
 
         if not display_name or not bundle_id:
             warn(f"Skipping app with incomplete configuration: {app}")
@@ -603,10 +608,11 @@ def ensure_openvpn_setup() -> None:
     log("\nStep 3: Downloading OpenVPN profile from server...")
     log("-" * 40)
 
-    # Create a temporary directory for the profile
-    temp_dir = Path.home() / ".config" / "openvpn-setup"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    profile_path = temp_dir / "profile.ovpn"
+    # Download to ~/Downloads with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    downloads_dir = Path.home() / "Downloads"
+    profile_path = downloads_dir / f"openvpn-profile-{timestamp}.ovpn"
 
     # Use wget to download the profile with authentication
     server_url = server_url + "/rest/GetUserlogin"
@@ -631,41 +637,45 @@ def ensure_openvpn_setup() -> None:
 
     success(f"OpenVPN profile downloaded to: {profile_path}")
 
-    # Apply profile to OpenVPN Connect
-    log("\nStep 4: Applying profile to OpenVPN Connect...")
+    # Interactive step: Open OpenVPN Connect for manual profile import
+    log("\nStep 4: Import profile in OpenVPN Connect...")
     log("-" * 40)
-
-    # OpenVPN Connect profile location
-    openvpn_profiles_dir = Path.home() / "Library" / "Application Support" / "OpenVPN Connect" / "profiles"
-    openvpn_profiles_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy profile to OpenVPN Connect directory
-    destination_profile = openvpn_profiles_dir / "profile.ovpn"
-
-    try:
-        shutil.copy(str(profile_path), str(destination_profile))
-        success(f"Profile copied to: {destination_profile}")
-    except Exception as e:
-        warn(f"Failed to copy profile: {e}")
-        warn("You may need to manually import the profile from OpenVPN Connect app.")
-        log(f"Profile is available at: {profile_path}")
-        return
-
-    log("\nOpenVPN Connect setup completed!")
+    log("The OpenVPN profile has been downloaded to your Downloads folder.")
+    log(f"Profile location: {profile_path}")
+    log("")
     log("Next steps:")
-    log("  1. Open OpenVPN Connect app")
-    log("  2. The profile should appear automatically")
-    log("  3. Enter your credentials from 1Password when prompted")
-    log("  4. Connect to the VPN")
+    log("  1. OpenVPN Connect will be opened for you")
+    log("  2. In the OpenVPN Connect app, import the profile:")
+    log("     - Click on 'Import Profile' or the '+' button")
+    log("     - Navigate to Downloads folder and select the profile")
+    log("     - Or drag and drop the profile into OpenVPN Connect")
+    log("  3. Complete the profile setup in the GUI")
+    log("")
 
     # Prompt to open OpenVPN Connect
-    response = input("\nWould you like to open OpenVPN Connect now? (y/N): ").strip().lower()
-    if response == 'y':
-        log("Opening OpenVPN Connect...")
-        run_command(["open", "-a", "OpenVPN Connect"], check=False, capture=True)
-        success("OpenVPN Connect opened.")
+    response = input("Press Enter to open OpenVPN Connect (or 's' to skip): ").strip().lower()
+    if response == 's':
+        warn("Skipped opening OpenVPN Connect.")
+        log(f"You can manually import the profile from: {profile_path}")
+        return
 
-    success("OpenVPN setup completed.")
+    # Open OpenVPN Connect
+    log("Opening OpenVPN Connect...")
+    open_result = run_command(["open", "-a", "OpenVPN Connect"], check=False, capture=True)
+
+    if open_result.returncode != 0:
+        warn(f"Failed to open OpenVPN Connect: {open_result.stderr}")
+        log(f"Please manually open OpenVPN Connect and import the profile from: {profile_path}")
+        return
+
+    success("OpenVPN Connect opened.")
+    log("")
+
+    # Wait for user to complete the import
+    wait_for_user_confirmation("Press Enter when you've imported the profile in OpenVPN Connect...")
+
+    success("OpenVPN setup completed!")
+    log(f"Note: The profile file is still available at: {profile_path}")
 
 
 # ========================================
@@ -681,8 +691,8 @@ def main() -> None:
         #("Homebrew applications", ensure_homebrew_applications),
         #("Folders", ensure_folders),
         #("Git configuration", ensure_git_config),
-        #("1Password sign-in", ensure_1password_signin),
-        #("Interactive application setup", ensure_interactive_application_setup),
+        ("1Password sign-in", ensure_1password_signin),
+        ("Interactive application setup", ensure_interactive_application_setup),
         ("OpenVPN setup", ensure_openvpn_setup),
     ]
 
