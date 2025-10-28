@@ -40,7 +40,7 @@ def warn(message: str) -> None:
 def error_exit(message: str) -> None:
     """Print an error message with red color and exit."""
     print(f"\033[1;31m[ERROR]\033[0m {message}")
-    sys.exit(1)
+    raise SystemExit(1)
 
 
 def run_command(cmd: List[str], check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
@@ -244,6 +244,11 @@ def ensure_git_config() -> None:
         success(f"Git user.name already configured: {git_user_name}")
     else:
         log("Git user.name is not configured.")
+        # Check if running in an interactive terminal
+        if not sys.stdin.isatty():
+            warn("Not running in an interactive terminal. Cannot prompt for git user.name.")
+            warn("Please configure manually with: git config --global user.name \"Your Name\"")
+            return
         git_user_name = input("Enter your full name for git commits: ").strip()
         while not git_user_name:
             warn("Name cannot be empty.")
@@ -257,6 +262,11 @@ def ensure_git_config() -> None:
         success(f"Git user.email already configured: {git_user_email}")
     else:
         log("Git user.email is not configured.")
+        # Check if running in an interactive terminal
+        if not sys.stdin.isatty():
+            warn("Not running in an interactive terminal. Cannot prompt for git user.email.")
+            warn("Please configure manually with: git config --global user.email \"your@email.com\"")
+            return
         git_user_email = input("Enter your email for git commits: ").strip()
         while not git_user_email:
             warn("Email cannot be empty.")
@@ -351,6 +361,13 @@ def ensure_1password_signin() -> None:
 
     # App integration failed, fall back to manual sign-in
     warn("Could not sign in via 1Password app. Falling back to manual sign-in...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Cannot complete manual 1Password sign-in.")
+        warn("To complete 1Password setup, run: op signin")
+        return
+
     log("Note: For a smoother experience next time:")
     log("  1. Install the 1Password desktop app")
     log("  2. Go to Settings > Developer")
@@ -391,6 +408,12 @@ def ensure_interactive_application_setup() -> None:
     before attempting to launch them.
     """
     log("Ensuring interactive applications are set up...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping interactive application setup.")
+        warn("To set up interactive applications, run this script directly: uv run main.py")
+        return
 
     # Get the directory where this script is located
     script_dir = Path(__file__).parent
@@ -458,14 +481,36 @@ def main() -> None:
     """Main entry point for the setup script."""
     log("Starting macOS workstation setup...")
 
-    # Run setup steps
-    ensure_homebrew_applications()
-    ensure_folders()
-    ensure_git_config()
-    ensure_1password_signin()
-    ensure_interactive_application_setup()
+    # Run setup steps with error handling to ensure all steps are attempted
+    steps = [
+        ("Homebrew applications", ensure_homebrew_applications),
+        ("Folders", ensure_folders),
+        ("Git configuration", ensure_git_config),
+        ("1Password sign-in", ensure_1password_signin),
+        ("Interactive application setup", ensure_interactive_application_setup),
+    ]
 
-    success("All setup steps completed successfully!")
+    failed_steps = []
+
+    for step_name, step_func in steps:
+        try:
+            log(f"\n{'='*60}")
+            log(f"Step: {step_name}")
+            log(f"{'='*60}")
+            step_func()
+        except SystemExit:
+            # Catch sys.exit() calls from error_exit()
+            warn(f"Step '{step_name}' failed with critical error. Continuing with remaining steps...")
+            failed_steps.append(step_name)
+        except Exception as e:
+            warn(f"Step '{step_name}' failed: {e}. Continuing with remaining steps...")
+            failed_steps.append(step_name)
+
+    if failed_steps:
+        warn(f"\nThe following steps failed: {', '.join(failed_steps)}")
+        warn("Please review the errors above and re-run the script or fix issues manually.")
+    else:
+        success("All setup steps completed successfully!")
 
 
 if __name__ == "__main__":
