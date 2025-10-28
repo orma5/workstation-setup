@@ -183,13 +183,6 @@ if prompt_for_confirmation; then
   echo "press enter when done"
   read
 
-  # Postman
-  echo "press any key to open Postman to login"
-  read
-  open -a "Postman"
-  echo "press enter when done"
-  read
-
   # IntelliJ
   echo "press any key to open IntelliJ to login and install material colors theme"
   read

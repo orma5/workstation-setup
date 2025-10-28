@@ -14,6 +14,7 @@ It is called by jumpstart.sh and inherits sudo privileges from it.
 import subprocess
 import sys
 import shutil
+import json
 from pathlib import Path
 from typing import List, Dict
 import yaml
@@ -562,10 +563,38 @@ def ensure_openvpn_setup() -> None:
 
         if result.returncode == 0:
             success("Successfully fetched OpenVPN credentials from 1Password")
-            log("Credentials are available for OpenVPN configuration.")
+
+            # Parse JSON to extract username and password
+            credentials = json.loads(result.stdout)
+
+            # Extract username and password from fields
+            username = None
+            password = None
+
+            for field in credentials.get('fields', []):
+                field_id = field.get('id', '').lower()
+                field_label = field.get('label', '').lower()
+                field_value = field.get('value', '')
+
+                # Look for username field
+                if field_id == 'username' or 'username' in field_label:
+                    username = field_value
+                # Look for password field
+                elif field_id == 'password' or 'password' in field_label:
+                    password = field_value
+
+            if not username or not password:
+                warn("Could not find username or password in 1Password item")
+                warn("Please ensure the item has 'username' and 'password' fields")
+                return
+
+            log("Credentials extracted successfully.")
         else:
             warn(f"Failed to fetch credentials from 1Password: {result.stderr}")
             return
+    except json.JSONDecodeError as e:
+        warn(f"Failed to parse 1Password JSON response: {e}")
+        return
     except Exception as e:
         warn(f"Error fetching credentials from 1Password: {e}")
         return
@@ -579,9 +608,17 @@ def ensure_openvpn_setup() -> None:
     temp_dir.mkdir(parents=True, exist_ok=True)
     profile_path = temp_dir / "profile.ovpn"
 
-    # Use wget to download the profile
+    # Use wget to download the profile with authentication
     server_url = server_url + "/rest/GetUserlogin"
-    download_result = run_command(["wget", "-O", str(profile_path), server_url], check=False, capture=True)
+    print(f"username: {username}, password: {password}")
+    download_result = run_command([
+        "wget",
+        "-O", str(profile_path),
+        f"--user={username}",
+        f"--password={password}",
+        "--no-check-certificate",
+        server_url
+    ], check=False, capture=True)
 
     if download_result.returncode != 0:
         warn(f"Failed to download OpenVPN profile: {download_result.stderr}")

@@ -14,6 +14,6 @@ interactive_apps:
 
   - name: openvpn-connect
     display_name: "OpenVPN Connect"
-    bundle_id: "net.openvpn.client.app"
+    bundle_id: "org.openvpn.client.app"
     type: "automated"
     onepassword_item_id: "j4vwzzux5iengyae2bjx7g5bri"

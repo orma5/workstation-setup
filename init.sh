@@ -2,6 +2,23 @@
 set -euo pipefail
 
 # ========================================
+# macOS Workstation Setup Bootstrap Script
+# ========================================
+#
+# This script initializes a fresh macOS workstation by:
+# 1. Installing Xcode Command Line Tools and Homebrew
+# 2. Installing uv and Python
+# 3. Downloading setup files from GitHub (or using local files in dev mode)
+# 4. Running the Python setup helper (main.py)
+#
+# Usage:
+#   Production (downloads from GitHub):
+#     ./init.sh
+#
+#   Development (uses local files):
+#     LOCAL_DEV=1 ./init.sh
+#
+# ========================================
 # CONFIG
 # ========================================
 
@@ -9,8 +26,21 @@ GITHUB_REPO="orma5/workstation-setup"
 GITHUB_BRANCH="main"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH"
 TEMP_DIR="/tmp/workstation-setup"
-PYTHON_SCRIPT_PATH="$TEMP_DIR/main.py"
 UV_LOCAL_BIN="$HOME/.local/bin"
+
+# Local development mode - set LOCAL_DEV=1 to use files from current directory
+# Usage: LOCAL_DEV=1 ./init.sh
+LOCAL_DEV="${LOCAL_DEV:-0}"
+
+# Determine script directory (always set this for potential use)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Set Python script path based on mode (log message will be shown in main())
+if [[ "$LOCAL_DEV" == "1" ]]; then
+    PYTHON_SCRIPT_PATH="$SCRIPT_DIR/main.py"
+else
+    PYTHON_SCRIPT_PATH="$TEMP_DIR/main.py"
+fi
 
 # ========================================
 # UTILITIES
@@ -143,11 +173,32 @@ run_python_setup() {
 
 main() {
     log "Starting initial Mac setup bootstrap..."
+
+    # Show mode information
+    if [[ "$LOCAL_DEV" == "1" ]]; then
+        log "Running in LOCAL DEVELOPMENT mode - using files from: $SCRIPT_DIR"
+    fi
+
     require_sudo
 
     ensure_xcode_and_homebrew
     ensure_uv_and_python
-    download_setup_files
+
+    # Only download files if not in local dev mode
+    if [[ "$LOCAL_DEV" != "1" ]]; then
+        download_setup_files
+    else
+        log "Skipping file download (using local files)"
+        # Verify required local files exist
+        if [[ ! -f "$PYTHON_SCRIPT_PATH" ]]; then
+            error_exit "Local main.py not found at: $PYTHON_SCRIPT_PATH"
+        fi
+        if [[ ! -d "$SCRIPT_DIR/config" ]]; then
+            error_exit "Local config directory not found at: $SCRIPT_DIR/config"
+        fi
+        success "Using local files from: $SCRIPT_DIR"
+    fi
+
     run_python_setup
 
     success "All bootstrap steps completed successfully!"
