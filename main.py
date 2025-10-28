@@ -13,6 +13,7 @@ It is called by jumpstart.sh and inherits sudo privileges from it.
 
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 from typing import List, Dict
 import yaml
@@ -473,6 +474,163 @@ def ensure_interactive_application_setup() -> None:
     success("All interactive application setups processed.")
 
 
+def ensure_openvpn_setup() -> None:
+    """
+    Ensure OpenVPN Connect is set up with credentials from 1Password and profile from server.
+    This function automates the OpenVPN setup by:
+    1. Fetching credentials from 1Password CLI
+    2. Downloading the VPN profile from a user-specified server
+    3. Applying the profile to OpenVPN Connect
+    """
+    log("Ensuring OpenVPN Connect is set up...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping OpenVPN setup.")
+        warn("To set up OpenVPN, run this script directly: uv run main.py")
+        return
+
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    config_path = script_dir / "config" / "application-setup.yaml"
+
+    # Load configuration
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        interactive_apps = config.get('interactive_apps', [])
+    except Exception as e:
+        error_exit(f"Failed to load application-setup config: {e}")
+
+    # Find OpenVPN configuration
+    openvpn_config = None
+    for app in interactive_apps:
+        if app.get('name') == 'openvpn-connect' and app.get('type') == 'automated':
+            openvpn_config = app
+            break
+
+    if not openvpn_config:
+        warn("OpenVPN configuration not found in application-setup.yaml. Skipping.")
+        return
+
+    bundle_id = openvpn_config.get('bundle_id')
+    onepassword_item_id = openvpn_config.get('onepassword_item_id')
+
+    # Check if OpenVPN Connect is installed
+    if not is_app_installed(bundle_id):
+        warn("OpenVPN Connect is not installed. Skipping setup.")
+        warn("Install it first with: brew install --cask openvpn-connect")
+        return
+
+    # Check if 1Password CLI is available and authenticated
+    result = run_command(["which", "op"], check=False, capture=True)
+    if result.returncode != 0:
+        warn("1Password CLI (op) is not installed. Cannot fetch OpenVPN credentials.")
+        warn("Install 1password-cli via Homebrew and sign in first.")
+        return
+
+    # Verify 1Password CLI is authenticated
+    whoami_result = run_command(["op", "whoami"], check=False, capture=True)
+    if whoami_result.returncode != 0:
+        warn("1Password CLI is not authenticated. Please sign in first with: op signin")
+        return
+
+    log("\n" + "="*60)
+    log("Setting up: OpenVPN Connect (Automated)")
+    log("="*60)
+
+    # Prompt user for VPN server address
+    log("\nStep 1: VPN Profile Server")
+    log("-" * 40)
+    server_url = input("Enter the server URL to download the OpenVPN profile (e.g., https://vpn.example.com/profile.ovpn): ").strip()
+
+    if not server_url:
+        warn("No server URL provided. Skipping OpenVPN setup.")
+        return
+
+    # Validate URL format (basic check)
+    if not (server_url.startswith('http://') or server_url.startswith('https://')):
+        warn("Invalid URL format. URL must start with http:// or https://")
+        return
+
+    # Fetch credentials from 1Password
+    log("\nStep 2: Fetching OpenVPN credentials from 1Password...")
+    log("-" * 40)
+    try:
+        # Fetch the item in JSON format
+        result = run_command(["op", "item", "get", onepassword_item_id, "--format", "json"], check=True, capture=True)
+
+        if result.returncode == 0:
+            success("Successfully fetched OpenVPN credentials from 1Password")
+            log("Credentials are available for OpenVPN configuration.")
+        else:
+            warn(f"Failed to fetch credentials from 1Password: {result.stderr}")
+            return
+    except Exception as e:
+        warn(f"Error fetching credentials from 1Password: {e}")
+        return
+
+    # Download VPN profile
+    log("\nStep 3: Downloading OpenVPN profile from server...")
+    log("-" * 40)
+
+    # Create a temporary directory for the profile
+    temp_dir = Path.home() / ".config" / "openvpn-setup"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    profile_path = temp_dir / "profile.ovpn"
+
+    # Use wget to download the profile
+    server_url = server_url + "/rest/GetUserlogin"
+    download_result = run_command(["wget", "-O", str(profile_path), server_url], check=False, capture=True)
+
+    if download_result.returncode != 0:
+        warn(f"Failed to download OpenVPN profile: {download_result.stderr}")
+        warn("Please check the server URL and try again.")
+        return
+
+    if not profile_path.exists() or profile_path.stat().st_size == 0:
+        warn("Downloaded profile is empty or does not exist.")
+        return
+
+    success(f"OpenVPN profile downloaded to: {profile_path}")
+
+    # Apply profile to OpenVPN Connect
+    log("\nStep 4: Applying profile to OpenVPN Connect...")
+    log("-" * 40)
+
+    # OpenVPN Connect profile location
+    openvpn_profiles_dir = Path.home() / "Library" / "Application Support" / "OpenVPN Connect" / "profiles"
+    openvpn_profiles_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy profile to OpenVPN Connect directory
+    destination_profile = openvpn_profiles_dir / "profile.ovpn"
+
+    try:
+        shutil.copy(str(profile_path), str(destination_profile))
+        success(f"Profile copied to: {destination_profile}")
+    except Exception as e:
+        warn(f"Failed to copy profile: {e}")
+        warn("You may need to manually import the profile from OpenVPN Connect app.")
+        log(f"Profile is available at: {profile_path}")
+        return
+
+    log("\nOpenVPN Connect setup completed!")
+    log("Next steps:")
+    log("  1. Open OpenVPN Connect app")
+    log("  2. The profile should appear automatically")
+    log("  3. Enter your credentials from 1Password when prompted")
+    log("  4. Connect to the VPN")
+
+    # Prompt to open OpenVPN Connect
+    response = input("\nWould you like to open OpenVPN Connect now? (y/N): ").strip().lower()
+    if response == 'y':
+        log("Opening OpenVPN Connect...")
+        run_command(["open", "-a", "OpenVPN Connect"], check=False, capture=True)
+        success("OpenVPN Connect opened.")
+
+    success("OpenVPN setup completed.")
+
+
 # ========================================
 # MAIN
 # ========================================
@@ -483,11 +641,12 @@ def main() -> None:
 
     # Run setup steps with error handling to ensure all steps are attempted
     steps = [
-        ("Homebrew applications", ensure_homebrew_applications),
-        ("Folders", ensure_folders),
-        ("Git configuration", ensure_git_config),
-        ("1Password sign-in", ensure_1password_signin),
-        ("Interactive application setup", ensure_interactive_application_setup),
+        #("Homebrew applications", ensure_homebrew_applications),
+        #("Folders", ensure_folders),
+        #("Git configuration", ensure_git_config),
+        #("1Password sign-in", ensure_1password_signin),
+        #("Interactive application setup", ensure_interactive_application_setup),
+        ("OpenVPN setup", ensure_openvpn_setup),
     ]
 
     failed_steps = []

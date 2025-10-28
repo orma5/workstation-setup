@@ -11,3 +11,9 @@ interactive_apps:
     display_name: "Slack"
     bundle_id: "com.tinyspeck.slackmacgap"
     instructions: "Please sign in to your workspace(s)"
+
+  - name: openvpn-connect
+    display_name: "OpenVPN Connect"
+    bundle_id: "net.openvpn.client.app"
+    type: "automated"
+    onepassword_item_id: "j4vwzzux5iengyae2bjx7g5bri"
