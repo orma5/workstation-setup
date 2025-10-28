@@ -10,7 +10,7 @@ casks:
   - 1password
   - 1password-cli
   - windows-app
-  - postman
+  - bruno
   - google-chrome
   - visual-studio-code
   - teamviewer

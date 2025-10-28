@@ -97,6 +97,30 @@ def load_folders_config(config_path: Path) -> List[str]:
         error_exit(f"Failed to load folders config: {e}")
 
 
+def load_interactive_apps_config(config_path: Path) -> List[Dict]:
+    """Load the interactive applications setup configuration from YAML file."""
+    if not config_path.exists():
+        error_exit(f"Interactive apps config file not found: {config_path}")
+
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config.get('interactive_apps', [])
+    except Exception as e:
+        error_exit(f"Failed to load interactive apps config: {e}")
+
+
+def is_app_installed(app_name: str) -> bool:
+    """Check if a macOS application is installed."""
+    result = run_command(["mdfind", f"kMDItemCFBundleIdentifier == '{app_name}'"], check=False, capture=True)
+    return result.returncode == 0 and result.stdout.strip() != ""
+
+
+def wait_for_user_confirmation(prompt: str = "Press Enter when done...") -> None:
+    """Wait for user to press Enter to continue."""
+    input(prompt)
+
+
 # ========================================
 # DECLARATIVE SETUP FUNCTIONS
 # ========================================
@@ -281,6 +305,151 @@ def ensure_git_config() -> None:
     success("Git configuration setup completed.")
 
 
+def ensure_1password_signin() -> None:
+    """
+    Ensure user is signed in to 1Password CLI.
+    This function is declarative and idempotent - it checks if already signed in
+    before attempting authentication.
+    """
+    log("Ensuring 1Password CLI is authenticated...")
+
+    # Check if op command is available
+    result = run_command(["which", "op"], check=False, capture=True)
+    if result.returncode != 0:
+        warn("1Password CLI (op) is not installed. Skipping 1Password authentication.")
+        warn("Install 1password-cli via Homebrew if you need 1Password integration.")
+        return
+
+    # Check if already signed in
+    result = run_command(["op", "account", "list"], check=False, capture=True)
+    if result.returncode == 0 and result.stdout.strip():
+        # Check if we can actually use the CLI (authenticated session)
+        whoami_result = run_command(["op", "whoami"], check=False, capture=True)
+        if whoami_result.returncode == 0:
+            account_info = whoami_result.stdout.strip()
+            success(f"Already signed in to 1Password: {account_info}")
+            return
+
+    # Not signed in, need to authenticate
+    log("1Password CLI is not authenticated. Starting sign-in process...")
+
+    # First try: Authenticate via 1Password app integration
+    log("Attempting to sign in via 1Password app integration...")
+    log("Make sure 1Password app is installed and 'Integrate with 1Password CLI' is enabled in Settings > Developer")
+
+    # Try to sign in using the app integration
+    app_signin_result = run_command(["op", "signin"], check=False, capture=False)
+
+    if app_signin_result.returncode == 0:
+        # Verify the sign-in worked
+        verify_result = run_command(["op", "whoami"], check=False, capture=True)
+        if verify_result.returncode == 0:
+            account_info = verify_result.stdout.strip()
+            success(f"Successfully signed in to 1Password via app: {account_info}")
+            success("1Password CLI setup completed.")
+            return
+
+    # App integration failed, fall back to manual sign-in
+    warn("Could not sign in via 1Password app. Falling back to manual sign-in...")
+    log("Note: For a smoother experience next time:")
+    log("  1. Install the 1Password desktop app")
+    log("  2. Go to Settings > Developer")
+    log("  3. Enable 'Integrate with 1Password CLI'")
+
+    # Prompt for sign-in address
+    print("\n1Password Manual Sign-In")
+    print("-" * 50)
+    signin_address = input("Enter your 1Password sign-in address [default: https://my.1password.com]: ").strip()
+    if not signin_address:
+        signin_address = "https://my.1password.com"
+
+    log(f"Signing in to 1Password at {signin_address}...")
+    log("You will be prompted for your email, Secret Key, and password.")
+
+    # Run op account add interactively (it will prompt user for credentials)
+    result = run_command(["op", "account", "add", "--address", signin_address], check=False, capture=False)
+
+    if result.returncode == 0:
+        # Verify the sign-in worked
+        verify_result = run_command(["op", "whoami"], check=False, capture=True)
+        if verify_result.returncode == 0:
+            account_info = verify_result.stdout.strip()
+            success(f"Successfully signed in to 1Password: {account_info}")
+        else:
+            success("1Password account added. You may need to sign in again when running commands.")
+    else:
+        warn("Failed to sign in to 1Password. You can sign in manually later with: op account add")
+
+    success("1Password CLI setup completed.")
+
+
+def ensure_interactive_application_setup() -> None:
+    """
+    Ensure interactive applications (Chrome, Slack) are set up by launching them
+    and allowing the user to sign in through their GUI.
+    This function is declarative and idempotent - it checks if apps are installed
+    before attempting to launch them.
+    """
+    log("Ensuring interactive applications are set up...")
+
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    config_path = script_dir / "config" / "application-setup.yaml"
+
+    # Load configuration
+    interactive_apps = load_interactive_apps_config(config_path)
+
+    if not interactive_apps:
+        warn("No interactive applications specified in configuration.")
+        return
+
+    log(f"Found {len(interactive_apps)} interactive applications to set up...")
+
+    for app in interactive_apps:
+        display_name = app.get('display_name')
+        bundle_id = app.get('bundle_id')
+        instructions = app.get('instructions', 'Please complete the setup')
+
+        if not display_name or not bundle_id:
+            warn(f"Skipping app with incomplete configuration: {app}")
+            continue
+
+        # Check if app is installed
+        if not is_app_installed(bundle_id):
+            warn(f"{display_name} is not installed. Skipping setup.")
+            warn(f"Install it first with: brew install --cask {app.get('name', 'app-name')}")
+            continue
+
+        # Launch app for interactive setup
+        log(f"\n{'='*60}")
+        log(f"Setting up: {display_name}")
+        log(f"{'='*60}")
+        log(instructions)
+        log("")
+
+        # Prompt user to continue
+        response = input(f"Press Enter to open {display_name} (or 's' to skip): ").strip().lower()
+        if response == 's':
+            warn(f"Skipped {display_name} setup.")
+            continue
+
+        # Launch the application
+        log(f"Opening {display_name}...")
+        result = run_command(["open", "-a", display_name], check=False, capture=True)
+
+        if result.returncode != 0:
+            warn(f"Failed to open {display_name}: {result.stderr}")
+            continue
+
+        success(f"{display_name} opened.")
+
+        # Wait for user to complete setup
+        wait_for_user_confirmation(f"Press Enter when you've completed the setup for {display_name}...")
+        success(f"{display_name} setup completed.")
+
+    success("All interactive application setups processed.")
+
+
 # ========================================
 # MAIN
 # ========================================
@@ -293,6 +462,8 @@ def main() -> None:
     ensure_homebrew_applications()
     ensure_folders()
     ensure_git_config()
+    ensure_1password_signin()
+    ensure_interactive_application_setup()
 
     success("All setup steps completed successfully!")
 

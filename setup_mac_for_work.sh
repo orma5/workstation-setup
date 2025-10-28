@@ -197,6 +197,13 @@ if prompt_for_confirmation; then
   echo "press enter when done"
   read
 
+  #VS Code
+  echo "press any key to open vSCODE to login and install profiles"
+  read
+  open -a "visual studio code"
+  echo "press enter when done"
+  read
+
   # windows app
   echo "press any key to open remote desktop and add connections"
   read

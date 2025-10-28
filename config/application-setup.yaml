@@ -1,0 +1,13 @@
+# Interactive Application Setup Configuration
+# These applications require manual GUI-based login/configuration
+
+interactive_apps:
+  - name: google-chrome
+    display_name: "Google Chrome"
+    bundle_id: "com.google.Chrome"
+    instructions: "Please sign in to your Google account and sync your settings (bookmarks, extensions, etc.)"
+
+  - name: slack
+    display_name: "Slack"
+    bundle_id: "com.tinyspeck.slackmacgap"
+    instructions: "Please sign in to your workspace(s)"

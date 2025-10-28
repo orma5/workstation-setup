@@ -62,6 +62,7 @@ download_setup_files() {
     # Download config files
     download_file "$GITHUB_RAW_BASE/config/applications.yaml" "$TEMP_DIR/config/applications.yaml"
     download_file "$GITHUB_RAW_BASE/config/folders.yaml" "$TEMP_DIR/config/folders.yaml"
+    download_file "$GITHUB_RAW_BASE/config/application-setup.yaml" "$TEMP_DIR/config/application-setup.yaml"
 
     # Download dotfiles
     download_file "$GITHUB_RAW_BASE/dotfiles/.gitconfig" "$TEMP_DIR/dotfiles/.gitconfig"
