@@ -545,22 +545,8 @@ def ensure_openvpn_setup() -> None:
     log("Setting up: OpenVPN Connect (Automated)")
     log("="*60)
 
-    # Prompt user for VPN server address
-    log("\nStep 1: VPN Profile Server")
-    log("-" * 40)
-    server_url = input("Enter the server URL to download the OpenVPN profile (e.g., https://vpn.example.com/profile.ovpn): ").strip()
-
-    if not server_url:
-        warn("No server URL provided. Skipping OpenVPN setup.")
-        return
-
-    # Validate URL format (basic check)
-    if not (server_url.startswith('http://') or server_url.startswith('https://')):
-        warn("Invalid URL format. URL must start with http:// or https://")
-        return
-
-    # Fetch credentials from 1Password
-    log("\nStep 2: Fetching OpenVPN credentials from 1Password...")
+    # Fetch credentials and profile URL from 1Password
+    log("\nStep 1: Fetching OpenVPN credentials and profile URL from 1Password...")
     log("-" * 40)
     try:
         # Fetch the item in JSON format
@@ -572,28 +558,35 @@ def ensure_openvpn_setup() -> None:
             # Parse JSON to extract username and password
             credentials = json.loads(result.stdout)
 
-            # Extract username and password from fields
+            # Extract username, password, and profile-download URL from fields
             username = None
             password = None
+            profile_download_url = None
 
             for field in credentials.get('fields', []):
-                field_id = field.get('id', '').lower()
-                field_label = field.get('label', '').lower()
+                field_id = field.get('id', '')
+                field_label = field.get('label', '')
                 field_value = field.get('value', '')
 
-                # Look for username field
-                if field_id == 'username' or 'username' in field_label:
+                # Extract specific fields by ID or label
+                if field_id == 'username':
                     username = field_value
-                # Look for password field
-                elif field_id == 'password' or 'password' in field_label:
+                elif field_id == 'password':
                     password = field_value
+                elif field_label == 'profile-download':
+                    profile_download_url = field_value
 
             if not username or not password:
                 warn("Could not find username or password in 1Password item")
                 warn("Please ensure the item has 'username' and 'password' fields")
                 return
 
-            log("Credentials extracted successfully.")
+            if not profile_download_url:
+                warn("Could not find profile-download URL in 1Password item")
+                warn("Please ensure the item has a 'profile-download' field with the download URL")
+                return
+
+            log("Credentials and profile URL extracted successfully.")
         else:
             warn(f"Failed to fetch credentials from 1Password: {result.stderr}")
             return
@@ -605,7 +598,7 @@ def ensure_openvpn_setup() -> None:
         return
 
     # Download VPN profile
-    log("\nStep 3: Downloading OpenVPN profile from server...")
+    log("\nStep 2: Downloading OpenVPN profile from server...")
     log("-" * 40)
 
     # Download to ~/Downloads with timestamp
@@ -615,15 +608,13 @@ def ensure_openvpn_setup() -> None:
     profile_path = downloads_dir / f"openvpn-profile-{timestamp}.ovpn"
 
     # Use wget to download the profile with authentication
-    server_url = server_url + "/rest/GetUserlogin"
-    print(f"username: {username}, password: {password}")
     download_result = run_command([
         "wget",
         "-O", str(profile_path),
         f"--user={username}",
         f"--password={password}",
         "--no-check-certificate",
-        server_url
+        profile_download_url
     ], check=False, capture=True)
 
     if download_result.returncode != 0:
@@ -638,7 +629,7 @@ def ensure_openvpn_setup() -> None:
     success(f"OpenVPN profile downloaded to: {profile_path}")
 
     # Interactive step: Open OpenVPN Connect for manual profile import
-    log("\nStep 4: Import profile in OpenVPN Connect...")
+    log("\nStep 3: Import profile in OpenVPN Connect...")
     log("-" * 40)
     log("The OpenVPN profile has been downloaded to your Downloads folder.")
     log(f"Profile location: {profile_path}")
