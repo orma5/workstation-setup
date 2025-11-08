@@ -13,7 +13,6 @@ It is called by jumpstart.sh and inherits sudo privileges from it.
 
 import subprocess
 import sys
-import shutil
 import json
 from pathlib import Path
 from typing import List, Dict
@@ -669,6 +668,882 @@ def ensure_openvpn_setup() -> None:
     log(f"Note: The profile file is still available at: {profile_path}")
 
 
+def ensure_aws_cli_setup() -> None:
+    """
+    Ensure AWS CLI is set up with credentials from 1Password and configure kubectl for EKS.
+    This function automates the AWS CLI and kubectl setup by:
+    1. Fetching credentials from 1Password CLI (including EKS cluster name from "EKS" field)
+    2. Configuring AWS CLI with access key, secret key, and region
+    3. Configuring kubectl for EKS cluster if "EKS" field is present in 1Password
+    """
+    log("Ensuring AWS CLI is set up...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping AWS CLI setup.")
+        warn("To set up AWS CLI, run this script directly: uv run main.py")
+        return
+
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    config_path = script_dir / "config" / "application-setup.yaml"
+
+    # Load configuration
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        interactive_apps = config.get('interactive_apps', [])
+    except Exception as e:
+        error_exit(f"Failed to load application-setup config: {e}")
+
+    # Find AWS CLI configuration
+    aws_config = None
+    for app in interactive_apps:
+        if app.get('name') == 'awscli' and app.get('type') == 'automated':
+            aws_config = app
+            break
+
+    if not aws_config:
+        warn("AWS CLI configuration not found in application-setup.yaml. Skipping.")
+        return
+
+    onepassword_item_id = aws_config.get('onepassword_item_id')
+
+    # Check if AWS CLI is installed
+    result = run_command(["which", "aws"], check=False, capture=True)
+    if result.returncode != 0:
+        warn("AWS CLI is not installed. Skipping setup.")
+        warn("Install it first with: brew install awscli")
+        return
+
+    # Check if 1Password CLI is available and authenticated
+    result = run_command(["which", "op"], check=False, capture=True)
+    if result.returncode != 0:
+        warn("1Password CLI (op) is not installed. Cannot fetch AWS credentials.")
+        warn("Install 1password-cli via Homebrew and sign in first.")
+        return
+
+    # Verify 1Password CLI is authenticated
+    whoami_result = run_command(["op", "whoami"], check=False, capture=True)
+    if whoami_result.returncode != 0:
+        warn("1Password CLI is not authenticated. Please sign in first with: op signin")
+        return
+
+    log("\n" + "="*60)
+    log("Setting up: AWS CLI (Automated)")
+    log("="*60)
+
+    # Check if AWS is already configured
+    aws_credentials_file = Path.home() / ".aws" / "credentials"
+    aws_config_file = Path.home() / ".aws" / "config"
+
+    if aws_credentials_file.exists() and aws_credentials_file.stat().st_size > 0:
+        log("AWS CLI appears to be already configured.")
+        response = input("Do you want to reconfigure AWS CLI? (y/N): ").strip().lower()
+        if response not in ['y', 'yes']:
+            success("Skipping AWS CLI configuration.")
+            return
+
+    # Fetch credentials from 1Password
+    log("\nStep 1: Fetching AWS credentials from 1Password...")
+    log("-" * 40)
+    try:
+        # Fetch the item in JSON format
+        result = run_command(["op", "item", "get", onepassword_item_id, "--reveal","--format", "json"], check=True, capture=True)
+
+        if result.returncode == 0:
+            success("Successfully fetched AWS credentials from 1Password")
+
+            # Parse JSON to extract credentials
+            credentials = json.loads(result.stdout)
+
+            # Extract fields
+            access_key_id = None
+            secret_access_key = None
+            eks_cluster_name = None
+            region = ""
+            output_format = "json"
+
+            for field in credentials.get('fields', []):
+                field_label = field.get('label', '').lower()
+                field_value = field.get('value', '')
+
+                # Look for access key
+                if field_label == 'access key':
+                    access_key_id = field_value
+                # Look for secret key
+                elif field_label == 'access secret':
+                    secret_access_key = field_value
+                # Look for EKS cluster name
+                elif field_label == 'eks':
+                    eks_cluster_name = field_value
+
+            if not access_key_id or not secret_access_key:
+                warn("Could not find access key or secret key in 1Password item")
+                warn("Please ensure the item has fields for AWS access key and secret key")
+                return
+
+            log("Credentials extracted successfully.")
+            if eks_cluster_name:
+                log(f"Found EKS cluster configuration: {eks_cluster_name}")
+
+            # Set default values if not found
+            region = input("Enter AWS region (default: eu-west-1): ").strip()
+            if not region:
+                region = "eu-west-1"
+
+        else:
+            warn(f"Failed to fetch credentials from 1Password: {result.stderr}")
+            return
+    except json.JSONDecodeError as e:
+        warn(f"Failed to parse 1Password JSON response: {e}")
+        return
+    except Exception as e:
+        warn(f"Error fetching credentials from 1Password: {e}")
+        return
+
+    # Configure AWS CLI
+    log("\nStep 2: Configuring AWS CLI...")
+    log("-" * 40)
+
+    try:
+        # Create .aws directory if it doesn't exist
+        aws_dir = Path.home() / ".aws"
+        aws_dir.mkdir(parents=True, exist_ok=True)
+
+        # Configure AWS CLI using environment variables and aws configure set
+        log("Setting AWS access key ID...")
+        result = run_command(["aws", "configure", "set", "aws_access_key_id", access_key_id], check=False, capture=True)
+        if result.returncode != 0:
+            warn(f"Failed to set AWS access key ID: {result.stderr}")
+            return
+
+        log("Setting AWS secret access key...")
+        result = run_command(["aws", "configure", "set", "aws_secret_access_key", secret_access_key], check=False, capture=True)
+        if result.returncode != 0:
+            warn(f"Failed to set AWS secret access key: {result.stderr}")
+            return
+
+        log(f"Setting default region to {region}...")
+        result = run_command(["aws", "configure", "set", "region", region], check=False, capture=True)
+        if result.returncode != 0:
+            warn(f"Failed to set AWS region: {result.stderr}")
+            return
+
+        log(f"Setting output format to {output_format}...")
+        result = run_command(["aws", "configure", "set", "output", output_format], check=False, capture=True)
+        if result.returncode != 0:
+            warn(f"Failed to set AWS output format: {result.stderr}")
+            return
+
+        success("AWS CLI configured successfully!")
+
+        # Verify configuration
+        log("\nStep 3: Verifying AWS CLI configuration...")
+        log("-" * 40)
+        verify_result = run_command(["aws", "sts", "get-caller-identity"], check=False, capture=True)
+        if verify_result.returncode == 0:
+            success("AWS CLI is working correctly!")
+            log(f"Account information:\n{verify_result.stdout}")
+        else:
+            warn("Could not verify AWS credentials. You may need to check your configuration.")
+            warn(f"Error: {verify_result.stderr}")
+
+    except Exception as e:
+        warn(f"Error configuring AWS CLI: {e}")
+        return
+
+    # Configure kubectl for EKS if cluster name is available
+    if eks_cluster_name:
+        log("\nStep 4: Configuring kubectl for EKS cluster...")
+        log("-" * 40)
+
+        # Check if kubectl is installed
+        kubectl_check = run_command(["which", "kubectl"], check=False, capture=True)
+        if kubectl_check.returncode != 0:
+            warn("kubectl is not installed. Skipping EKS kubectl setup.")
+            warn("Install it with: brew install kubernetes-cli")
+        else:
+            log(f"Configuring kubectl for EKS cluster: {eks_cluster_name}")
+            log(f"Using region: {region}")
+
+            # Run aws eks update-kubeconfig
+            kubectl_result = run_command([
+                "aws", "eks", "update-kubeconfig",
+                "--name", eks_cluster_name,
+                "--region", region
+            ], check=False, capture=True)
+
+            if kubectl_result.returncode == 0:
+                success(f"kubectl configured successfully for cluster: {eks_cluster_name}")
+                if kubectl_result.stdout.strip():
+                    log(kubectl_result.stdout.strip())
+                log("You can now use kubectl to interact with your EKS cluster.")
+                log("Use 'kubectl config get-contexts' to see configured contexts.")
+            else:
+                warn(f"Failed to configure kubectl for cluster: {eks_cluster_name}")
+                if kubectl_result.stderr.strip():
+                    warn(f"Error: {kubectl_result.stderr.strip()}")
+                log("\nCommon reasons for failure:")
+                log("  - Cluster does not exist in the specified region")
+                log("  - Insufficient AWS permissions to access the cluster")
+                log("  - Incorrect cluster name in 1Password")
+
+    success("AWS CLI setup completed!")
+
+
+def ensure_macos_settings() -> None:
+    """
+    Ensure macOS system preferences are configured according to best practices.
+    This function applies numerous defaults write commands to configure:
+    - General system settings
+    - Input devices (trackpad, keyboard)
+    - Power management
+    - Security settings
+    - Finder preferences
+    - Dock configuration
+    - Application-specific settings
+    """
+    log("Ensuring macOS system settings are configured...")
+
+    # Track failed settings for summary
+    failed_settings = []
+
+    def apply_setting(description: str, command: List[str]) -> None:
+        """Apply a single macOS setting and log the result."""
+        try:
+            result = run_command(command, check=False, capture=True)
+            if result.returncode == 0:
+                success(description)
+            else:
+                warn(f"{description} - Failed: {result.stderr.strip() if result.stderr else 'Unknown error'}")
+                failed_settings.append(description)
+        except Exception as e:
+            warn(f"{description} - Error: {e}")
+            failed_settings.append(description)
+
+    # ========================================
+    # GENERAL SYSTEM SETTINGS
+    # ========================================
+    log("\nConfiguring general system settings...")
+
+    apply_setting(
+        "Save to disk (not iCloud) by default",
+        ["defaults", "write", "NSGlobalDomain", "NSDocumentSaveNewDocumentsToCloud", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Automatically quit printer app when jobs complete",
+        ["defaults", "write", "com.apple.print.PrintingPrefs", "Quit When Finished", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Disable 'Are you sure you want to open?' dialog",
+        ["defaults", "write", "com.apple.LaunchServices", "LSQuarantine", "-bool", "false"]
+    )
+
+    # ========================================
+    # TRACKPAD SETTINGS
+    # ========================================
+    log("\nConfiguring trackpad settings...")
+
+    apply_setting(
+        "Enable tap to click (trackpad)",
+        ["defaults", "write", "com.apple.driver.AppleBluetoothMultitouch.trackpad", "Clicking", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Enable tap to click (current user)",
+        ["defaults", "-currentHost", "write", "NSGlobalDomain", "com.apple.mouse.tapBehavior", "-int", "1"]
+    )
+
+    apply_setting(
+        "Enable tap to click (login screen)",
+        ["defaults", "write", "NSGlobalDomain", "com.apple.mouse.tapBehavior", "-int", "1"]
+    )
+
+    # ========================================
+    # BLUETOOTH AUDIO
+    # ========================================
+    log("\nConfiguring Bluetooth audio quality...")
+
+    apply_setting(
+        "Increase Bluetooth audio quality",
+        ["defaults", "write", "com.apple.BluetoothAudioAgent", "Apple Bitpool Min (editable)", "-int", "40"]
+    )
+
+    # ========================================
+    # KEYBOARD SETTINGS
+    # ========================================
+    log("\nConfiguring keyboard settings...")
+
+    apply_setting(
+        "Enable full keyboard access for all controls",
+        ["defaults", "write", "NSGlobalDomain", "AppleKeyboardUIMode", "-int", "3"]
+    )
+
+    apply_setting(
+        "Disable press-and-hold for keys (favor key repeat)",
+        ["defaults", "write", "NSGlobalDomain", "ApplePressAndHoldEnabled", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Set fast keyboard repeat rate",
+        ["defaults", "write", "NSGlobalDomain", "KeyRepeat", "-int", "1"]
+    )
+
+    apply_setting(
+        "Set short initial key repeat delay",
+        ["defaults", "write", "NSGlobalDomain", "InitialKeyRepeat", "-int", "10"]
+    )
+
+    # Stop iTunes from responding to media keys
+    apply_setting(
+        "Stop iTunes from responding to media keys",
+        ["launchctl", "unload", "-w", "/System/Library/LaunchAgents/com.apple.rcd.plist"]
+    )
+
+    # ========================================
+    # POWER MANAGEMENT SETTINGS
+    # ========================================
+    log("\nConfiguring power management settings...")
+
+    apply_setting(
+        "Enable lid wakeup",
+        ["sudo", "pmset", "-a", "lidwake", "1"]
+    )
+
+    apply_setting(
+        "Sleep display after 15 minutes",
+        ["sudo", "pmset", "-a", "displaysleep", "15"]
+    )
+
+    apply_setting(
+        "Disable sleep while charging",
+        ["sudo", "pmset", "-c", "sleep", "0"]
+    )
+
+    apply_setting(
+        "Set 5 minute sleep on battery",
+        ["sudo", "pmset", "-b", "sleep", "5"]
+    )
+
+    apply_setting(
+        "Set 24 hour standby delay",
+        ["sudo", "pmset", "-a", "standbydelay", "86400"]
+    )
+
+    apply_setting(
+        "Never go into computer sleep mode",
+        ["sudo", "systemsetup", "-setcomputersleep", "Off"]
+    )
+
+    apply_setting(
+        "Disable hibernation mode",
+        ["sudo", "pmset", "-a", "hibernatemode", "0"]
+    )
+
+    # Remove sleep image file to save disk space
+    log("Removing sleep image file...")
+    sleepimage_path = Path("/private/var/vm/sleepimage")
+    try:
+        # Remove existing file
+        if sleepimage_path.exists():
+            run_command(["sudo", "rm", str(sleepimage_path)], check=False, capture=True)
+        # Create zero-byte file
+        run_command(["sudo", "touch", str(sleepimage_path)], check=False, capture=True)
+        # Make it immutable
+        result = run_command(["sudo", "chflags", "uchg", str(sleepimage_path)], check=False, capture=True)
+        if result.returncode == 0:
+            success("Sleep image file removed and locked")
+        else:
+            warn("Could not lock sleep image file")
+    except Exception as e:
+        warn(f"Error managing sleep image file: {e}")
+
+    # ========================================
+    # SECURITY SETTINGS
+    # ========================================
+    log("\nConfiguring security settings...")
+
+    apply_setting(
+        "Require password immediately after sleep/screensaver",
+        ["defaults", "write", "com.apple.screensaver", "askForPassword", "-int", "1"]
+    )
+
+    apply_setting(
+        "No delay for screensaver password",
+        ["defaults", "write", "com.apple.screensaver", "askForPasswordDelay", "-int", "0"]
+    )
+
+    # ========================================
+    # SCREENSHOT SETTINGS
+    # ========================================
+    log("\nConfiguring screenshot settings...")
+
+    desktop_path = str(Path.home() / "Desktop")
+    apply_setting(
+        "Save screenshots to Desktop",
+        ["defaults", "write", "com.apple.screencapture", "location", "-string", desktop_path]
+    )
+
+    apply_setting(
+        "Save screenshots in PNG format",
+        ["defaults", "write", "com.apple.screencapture", "type", "-string", "png"]
+    )
+
+    apply_setting(
+        "Disable shadow in screenshots",
+        ["defaults", "write", "com.apple.screencapture", "disable-shadow", "-bool", "true"]
+    )
+
+    # ========================================
+    # DISPLAY SETTINGS
+    # ========================================
+    log("\nConfiguring display settings...")
+
+    apply_setting(
+        "Enable subpixel font rendering on non-Apple LCDs",
+        ["defaults", "write", "NSGlobalDomain", "AppleFontSmoothing", "-int", "1"]
+    )
+
+    apply_setting(
+        "Enable HiDPI display modes",
+        ["sudo", "defaults", "write", "/Library/Preferences/com.apple.windowserver", "DisplayResolutionEnabled", "-bool", "true"]
+    )
+
+    # ========================================
+    # FINDER SETTINGS
+    # ========================================
+    log("\nConfiguring Finder settings...")
+
+    apply_setting(
+        "Allow quitting Finder via Cmd+Q",
+        ["defaults", "write", "com.apple.finder", "QuitMenuItem", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Disable Finder animations",
+        ["defaults", "write", "com.apple.finder", "DisableAllAnimations", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Set Desktop as default location for new Finder windows",
+        ["defaults", "write", "com.apple.finder", "NewWindowTarget", "-string", "PfDe"]
+    )
+
+    desktop_file_url = f"file://{Path.home()}/Desktop/"
+    apply_setting(
+        "Set Desktop path for new Finder windows",
+        ["defaults", "write", "com.apple.finder", "NewWindowTargetPath", "-string", desktop_file_url]
+    )
+
+    apply_setting(
+        "Show external hard drives on desktop",
+        ["defaults", "write", "com.apple.finder", "ShowExternalHardDrivesOnDesktop", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show hard drives on desktop",
+        ["defaults", "write", "com.apple.finder", "ShowHardDrivesOnDesktop", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show mounted servers on desktop",
+        ["defaults", "write", "com.apple.finder", "ShowMountedServersOnDesktop", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show removable media on desktop",
+        ["defaults", "write", "com.apple.finder", "ShowRemovableMediaOnDesktop", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show hidden files in Finder",
+        ["defaults", "write", "com.apple.finder", "AppleShowAllFiles", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show all filename extensions",
+        ["defaults", "write", "NSGlobalDomain", "AppleShowAllExtensions", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show Finder status bar",
+        ["defaults", "write", "com.apple.finder", "ShowStatusBar", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show Finder path bar",
+        ["defaults", "write", "com.apple.finder", "ShowPathbar", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Display full POSIX path in Finder title",
+        ["defaults", "write", "com.apple.finder", "_FXShowPosixPathInTitle", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Keep folders on top when sorting by name",
+        ["defaults", "write", "com.apple.finder", "_FXSortFoldersFirst", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Search current folder by default",
+        ["defaults", "write", "com.apple.finder", "FXDefaultSearchScope", "-string", "SCcf"]
+    )
+
+    apply_setting(
+        "Disable file extension change warning",
+        ["defaults", "write", "com.apple.finder", "FXEnableExtensionChangeWarning", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Enable spring loading for directories",
+        ["defaults", "write", "NSGlobalDomain", "com.apple.springing.enabled", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Remove spring loading delay",
+        ["defaults", "write", "NSGlobalDomain", "com.apple.springing.delay", "-float", "0"]
+    )
+
+    apply_setting(
+        "Avoid creating .DS_Store on network volumes",
+        ["defaults", "write", "com.apple.desktopservices", "DSDontWriteNetworkStores", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Avoid creating .DS_Store on USB volumes",
+        ["defaults", "write", "com.apple.desktopservices", "DSDontWriteUSBStores", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Disable disk image verification",
+        ["defaults", "write", "com.apple.frameworks.diskimages", "skip-verify", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Disable locked disk image verification",
+        ["defaults", "write", "com.apple.frameworks.diskimages", "skip-verify-locked", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Disable remote disk image verification",
+        ["defaults", "write", "com.apple.frameworks.diskimages", "skip-verify-remote", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Auto-open read-only disk images",
+        ["defaults", "write", "com.apple.frameworks.diskimages", "auto-open-ro-root", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Auto-open read-write disk images",
+        ["defaults", "write", "com.apple.frameworks.diskimages", "auto-open-rw-root", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Auto-open Finder for new removable disks",
+        ["defaults", "write", "com.apple.finder", "OpenWindowForNewRemovableDisk", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Use list view in Finder by default",
+        ["defaults", "write", "com.apple.finder", "FXPreferredViewStyle", "-string", "Nlsv"]
+    )
+
+    apply_setting(
+        "Disable empty Trash warning",
+        ["defaults", "write", "com.apple.finder", "WarnOnEmptyTrash", "-bool", "false"]
+    )
+
+    # Show ~/Library folder
+    log("Showing ~/Library folder...")
+    library_path = Path.home() / "Library"
+    try:
+        run_command(["chflags", "nohidden", str(library_path)], check=False, capture=True)
+        run_command(["xattr", "-d", "com.apple.FinderInfo", str(library_path)], check=False, capture=True)
+        success("~/Library folder is now visible")
+    except Exception as e:
+        warn(f"Could not show ~/Library folder: {e}")
+
+    # Show /Volumes folder
+    apply_setting(
+        "Show /Volumes folder",
+        ["sudo", "chflags", "nohidden", "/Volumes"]
+    )
+
+    # Expand File Info panes
+    apply_setting(
+        "Expand File Info panes in Finder",
+        ["defaults", "write", "com.apple.finder", "FXInfoPanesExpanded", "-dict",
+         "General", "-bool", "true",
+         "OpenWith", "-bool", "true",
+         "Privileges", "-bool", "true"]
+    )
+
+    # ========================================
+    # DOCK SETTINGS
+    # ========================================
+    log("\nConfiguring Dock settings...")
+
+    apply_setting(
+        "Set Dock icon size to 36 pixels",
+        ["defaults", "write", "com.apple.dock", "tilesize", "-int", "36"]
+    )
+
+    apply_setting(
+        "Minimize windows into application icon",
+        ["defaults", "write", "com.apple.dock", "minimize-to-application", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Show indicator lights for open apps",
+        ["defaults", "write", "com.apple.dock", "show-process-indicators", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Disable Dashboard",
+        ["defaults", "write", "com.apple.dashboard", "mcx-disabled", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Don't show Dashboard as a Space",
+        ["defaults", "write", "com.apple.dock", "dashboard-in-overlay", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Don't automatically rearrange Spaces",
+        ["defaults", "write", "com.apple.dock", "mru-spaces", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Don't show recent applications in Dock",
+        ["defaults", "write", "com.apple.dock", "show-recents", "-bool", "false"]
+    )
+
+    # ========================================
+    # APPLICATION-SPECIFIC SETTINGS
+    # ========================================
+    log("\nConfiguring application-specific settings...")
+
+    # iTerm2
+    apply_setting(
+        "Don't prompt when quitting iTerm",
+        ["defaults", "write", "com.googlecode.iterm2", "PromptOnQuit", "-bool", "false"]
+    )
+
+    # Activity Monitor
+    apply_setting(
+        "Show main window when launching Activity Monitor",
+        ["defaults", "write", "com.apple.ActivityMonitor", "OpenMainWindow", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Visualize CPU usage in Activity Monitor Dock icon",
+        ["defaults", "write", "com.apple.ActivityMonitor", "IconType", "-int", "5"]
+    )
+
+    apply_setting(
+        "Show all processes in Activity Monitor",
+        ["defaults", "write", "com.apple.ActivityMonitor", "ShowCategory", "-int", "0"]
+    )
+
+    apply_setting(
+        "Sort Activity Monitor by CPU usage",
+        ["defaults", "write", "com.apple.ActivityMonitor", "SortColumn", "-string", "CPUUsage"]
+    )
+
+    apply_setting(
+        "Set Activity Monitor sort direction",
+        ["defaults", "write", "com.apple.ActivityMonitor", "SortDirection", "-int", "0"]
+    )
+
+    # Disk Utility
+    apply_setting(
+        "Enable debug menu in Disk Utility",
+        ["defaults", "write", "com.apple.DiskUtility", "DUDebugMenuEnabled", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Enable advanced image options in Disk Utility",
+        ["defaults", "write", "com.apple.DiskUtility", "advanced-image-options", "-bool", "true"]
+    )
+
+    # Google Chrome
+    apply_setting(
+        "Disable backswipe navigation in Chrome (trackpad)",
+        ["defaults", "write", "com.google.Chrome", "AppleEnableSwipeNavigateWithScrolls", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Disable backswipe navigation in Chrome Canary (trackpad)",
+        ["defaults", "write", "com.google.Chrome.canary", "AppleEnableSwipeNavigateWithScrolls", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Disable backswipe navigation in Chrome (mouse)",
+        ["defaults", "write", "com.google.Chrome", "AppleEnableMouseSwipeNavigateWithScrolls", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Disable backswipe navigation in Chrome Canary (mouse)",
+        ["defaults", "write", "com.google.Chrome.canary", "AppleEnableMouseSwipeNavigateWithScrolls", "-bool", "false"]
+    )
+
+    apply_setting(
+        "Use system print dialog in Chrome",
+        ["defaults", "write", "com.google.Chrome", "DisablePrintPreview", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Use system print dialog in Chrome Canary",
+        ["defaults", "write", "com.google.Chrome.canary", "DisablePrintPreview", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Expand print dialog in Chrome",
+        ["defaults", "write", "com.google.Chrome", "PMPrintingExpandedStateForPrint2", "-bool", "true"]
+    )
+
+    apply_setting(
+        "Expand print dialog in Chrome Canary",
+        ["defaults", "write", "com.google.Chrome.canary", "PMPrintingExpandedStateForPrint2", "-bool", "true"]
+    )
+
+    # ========================================
+    # INTERACTIVE MANUAL STEPS
+    # ========================================
+    log("\nMacOS settings have been applied.")
+
+    # Check if running in interactive mode
+    if sys.stdin.isatty():
+        log("\n" + "="*60)
+        log("Manual Configuration Steps")
+        log("="*60)
+        log("The following settings need to be configured manually:")
+        log("  1. Top bar: Add sound, displays, and bluetooth controls")
+        log("  2. Desktop background: Set your preferred wallpaper")
+        log("")
+
+        response = input("Press Enter when you've completed these manual steps (or 's' to skip): ").strip().lower()
+        if response != 's':
+            success("Manual configuration steps completed.")
+        else:
+            warn("Skipped manual configuration steps. You can do these later.")
+    else:
+        log("\nNote: Some settings need manual configuration:")
+        log("  - Top bar: Add sound, displays, and bluetooth controls")
+        log("  - Desktop background: Set your preferred wallpaper")
+
+    # ========================================
+    # SUMMARY
+    # ========================================
+    if failed_settings:
+        warn(f"\n{len(failed_settings)} settings could not be applied:")
+        for setting in failed_settings:
+            warn(f"  - {setting}")
+        log("\nNote: Some settings may require a logout/restart to take effect.")
+        log("You can review and apply failed settings manually if needed.")
+    else:
+        success("\nAll macOS settings applied successfully!")
+        log("Note: Some settings may require a logout/restart to take effect.")
+
+    success("macOS system settings configuration completed.")
+
+
+def ensure_development_projects() -> None:
+    """
+    Ensure development projects are cloned.
+    This is a manual placeholder function that prompts the user to perform the step.
+    """
+    log("Ensuring development projects are cloned...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping development projects setup.")
+        warn("Please clone your development projects manually.")
+        return
+
+    log("\n" + "="*60)
+    log("Manual Step: Clone Development Projects")
+    log("="*60)
+    log("Please clone your development projects to the appropriate directories.")
+    log("")
+    log("Example steps:")
+    log("  1. Navigate to your projects folder")
+    log("  2. Clone repositories using: git clone <repository-url>")
+    log("  3. Repeat for all required projects")
+    log("")
+
+    # Wait for user to complete the manual step
+    wait_for_user_confirmation("Press Enter when you've cloned all development projects...")
+    success("Development projects setup completed.")
+
+
+def ensure_python_development_environments() -> None:
+    """
+    Ensure Python development environments are set up.
+    This is a manual placeholder function that prompts the user to perform the step.
+    """
+    log("Ensuring Python development environments are set up...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping Python development environments setup.")
+        warn("Please set up your Python development environments manually.")
+        return
+
+    log("\n" + "="*60)
+    log("Manual Step: Setup Python Development Environments")
+    log("="*60)
+    log("Please set up your Python development environments for your projects.")
+    log("")
+    log("Example steps:")
+    log("  1. Navigate to each Python project directory")
+    log("  2. Create virtual environments: python -m venv venv")
+    log("  3. Activate virtual environments: source venv/bin/activate")
+    log("  4. Install dependencies: pip install -r requirements.txt")
+    log("  5. Configure IDE/editor Python interpreters")
+    log("")
+
+    # Wait for user to complete the manual step
+    wait_for_user_confirmation("Press Enter when you've set up all Python development environments...")
+    success("Python development environments setup completed.")
+
+
+def ensure_terminal_configuration() -> None:
+    """
+    Ensure terminal is configured.
+    This is a manual placeholder function that prompts the user to perform the step.
+    """
+    log("Ensuring terminal is configured...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping terminal configuration.")
+        warn("Please configure your terminal manually.")
+        return
+
+    log("\n" + "="*60)
+    log("Manual Step: Configure Terminal")
+    log("="*60)
+    log("Please configure your terminal preferences and settings.")
+    log("")
+    log("Example steps:")
+    log("  1. Configure terminal theme/colors")
+    log("  2. Set up shell profile (.zshrc, .bashrc, etc.)")
+    log("  3. Install and configure shell plugins (oh-my-zsh, etc.)")
+    log("  4. Set up command aliases and environment variables")
+    log("  5. Configure terminal font and appearance")
+    log("")
+
+    # Wait for user to complete the manual step
+    wait_for_user_confirmation("Press Enter when you've configured the terminal...")
+    success("Terminal configuration completed.")
+
+
 # ========================================
 # MAIN
 # ========================================
@@ -679,12 +1554,17 @@ def main() -> None:
 
     # Run setup steps with error handling to ensure all steps are attempted
     steps = [
-        #("Homebrew applications", ensure_homebrew_applications),
-        #("Folders", ensure_folders),
-        #("Git configuration", ensure_git_config),
+        ("Homebrew applications", ensure_homebrew_applications),
+        ("Folders", ensure_folders),
+        ("Git configuration", ensure_git_config),
         ("1Password sign-in", ensure_1password_signin),
         ("Interactive application setup", ensure_interactive_application_setup),
         ("OpenVPN setup", ensure_openvpn_setup),
+        ("AWS CLI setup", ensure_aws_cli_setup),
+        ("macOS system settings", ensure_macos_settings),
+        ("Clone development projects", ensure_development_projects),
+        ("Setup Python development environments", ensure_python_development_environments),
+        ("Configure terminal", ensure_terminal_configuration),
     ]
 
     failed_steps = []

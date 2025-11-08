@@ -7,6 +7,21 @@ interactive_apps:
     bundle_id: "com.google.Chrome"
     instructions: "Please sign in to your Google account and sync your settings (bookmarks, extensions, etc.)"
 
+  - name: IntelliJ
+    display_name: "IntelliJ IDEA"
+    bundle_id: "com.jetbrains.intellij"
+    instructions: "Please Activate your licence, install the desired theme and set the keymap"
+
+  - name: VSCode
+    display_name: "Visual Studio Code"
+    bundle_id: "com.microsoft.VSCode"
+    instructions: "Please sync your profiles"
+  
+  - name: Windows-app
+    display_name: "Windows app"
+    bundle_id: "com.microsoft.rdc.macos"
+    instructions: "Please add your remote desktops"
+
   - name: slack
     display_name: "Slack"
     bundle_id: "com.tinyspeck.slackmacgap"
@@ -17,3 +32,9 @@ interactive_apps:
     bundle_id: "org.openvpn.client.app"
     type: "automated"
     onepassword_item_id: "j4vwzzux5iengyae2bjx7g5bri"
+
+  - name: awscli
+    display_name: "AWS CLI"
+    type: "automated"
+    onepassword_item_id: "4nhatmmbowfgr5pjzv3wx7xaa4"
+

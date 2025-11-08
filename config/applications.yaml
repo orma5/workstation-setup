@@ -27,3 +27,4 @@ formulae:
   - wget
   - dockutil
   - awscli
+  - maven
