@@ -1562,10 +1562,13 @@ def main() -> None:
         ("OpenVPN setup", ensure_openvpn_setup),
         ("AWS CLI setup", ensure_aws_cli_setup),
         ("macOS system settings", ensure_macos_settings),
-        ("Clone development projects", ensure_development_projects),
-        ("Setup Python development environments", ensure_python_development_environments),
+        ("Clone development projects", ensure_development_projects), # use glab
+        ("Setup Python development environments", ensure_python_development_environments), # use uv
         ("Configure terminal", ensure_terminal_configuration),
+        # setup ssh config
     ]
+
+
 
     failed_steps = []
 
