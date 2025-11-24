@@ -16,6 +16,7 @@ casks:
   - teamviewer
   - claude-code
   - gcloud-cli
+  - antigravity
 
 # Formula packages (CLI tools and libraries)
 formulae:
@@ -28,3 +29,4 @@ formulae:
   - dockutil
   - awscli
   - maven
+  - gemini-cli
