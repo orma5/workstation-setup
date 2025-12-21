@@ -1565,7 +1565,9 @@ def main() -> None:
         ("Clone development projects", ensure_development_projects), # use glab
         ("Setup Python development environments", ensure_python_development_environments), # use uv
         ("Configure terminal", ensure_terminal_configuration),
-        # setup ssh config
+        # setup ssh config and download footway config
+        # download wireguard config from 1password
+        # gcloud setup
     ]
 
 

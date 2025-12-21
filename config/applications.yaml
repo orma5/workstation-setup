@@ -30,3 +30,4 @@ formulae:
   - awscli
   - maven
   - gemini-cli
+  - wireguard-tools
