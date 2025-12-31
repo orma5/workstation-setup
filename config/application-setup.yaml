@@ -43,3 +43,8 @@ interactive_apps:
     type: "automated"
     onepassword_item_id: "t3uionw2uz2n5d3prpgaxiutwy"
 
+  - name: gitlab
+    display_name: "Gitlab"
+    type: "automated"
+    onepassword_item_id: "v7xuyltzkm562hpy7lkmrh2tiy"
+
