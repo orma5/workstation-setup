@@ -349,6 +349,9 @@ def ensure_1password_signin() -> None:
     # First try: Authenticate via 1Password app integration
     log("Attempting to sign in via 1Password app integration...")
     log("Make sure 1Password app is installed and 'Integrate with 1Password CLI' is enabled in Settings > Developer")
+    wait_for_user_confirmation(
+        "Press Enter to continue after enabling 1Password CLI integration..."
+    )
 
     # Try to sign in using the app integration
     app_signin_result = run_command(["op", "signin"], check=False, capture=False)
@@ -892,6 +895,169 @@ def ensure_aws_cli_setup() -> None:
                 log("  - Incorrect cluster name in 1Password")
 
     success("AWS CLI setup completed!")
+
+
+def ensure_ssh_config() -> None:
+    """
+    Ensure SSH configuration is set up.
+    1. Create ~/.ssh folder if not exists (0700).
+    2. Fetch config content from 1Password (notesPlain).
+    3. Create ~/.ssh/config with content (0600).
+    4. Ask user to enable SSH agent in 1Password.
+    """
+    log("Ensuring SSH configuration is set up...")
+
+    # Check if running in an interactive terminal
+    if not sys.stdin.isatty():
+        warn("Not running in an interactive terminal. Skipping SSH setup.")
+        warn("To set up SSH, run this script directly: uv run main.py")
+        return
+
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    config_path = script_dir / "config" / "application-setup.yaml"
+
+    # Load configuration
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        interactive_apps = config.get("interactive_apps", [])
+    except Exception as e:
+        error_exit(f"Failed to load application-setup config: {e}")
+
+    # Find SSH configuration
+    ssh_config = None
+    for app in interactive_apps:
+        if app.get("name") == "ssh configuration":
+            ssh_config = app
+            break
+
+    if not ssh_config:
+        warn("SSH configuration not found in application-setup.yaml. Skipping.")
+        return
+
+    onepassword_item_id = ssh_config.get("onepassword_item_id")
+    if not onepassword_item_id:
+        warn(
+            "SSH configuration in application-setup.yaml is missing onepassword_item_id. Skipping."
+        )
+        return
+
+    # Check if 1Password CLI is available and authenticated
+    result = run_command(["which", "op"], check=False, capture=True)
+    if result.returncode != 0:
+        warn("1Password CLI (op) is not installed. Cannot fetch SSH config.")
+        warn("Install 1password-cli via Homebrew and sign in first.")
+        return
+
+    # Verify 1Password CLI is authenticated
+    whoami_result = run_command(["op", "whoami"], check=False, capture=True)
+    if whoami_result.returncode != 0:
+        warn("1Password CLI is not authenticated. Please sign in first with: op signin")
+        return
+
+    log("\n" + "=" * 60)
+    log("Setting up: SSH Configuration")
+    log("=" * 60)
+
+    # Fetch credentials from 1Password
+    log("\nStep 1: Fetching SSH config from 1Password...")
+    log("-" * 40)
+
+    ssh_config_content = ""
+    try:
+        # Fetch the item in JSON format
+        result = run_command(
+            ["op", "item", "get", onepassword_item_id, "--format", "json"],
+            check=True,
+            capture=True,
+        )
+
+        if result.returncode == 0:
+            success("Successfully fetched SSH config item from 1Password")
+
+            # Parse JSON to extract notesPlain
+            item_data = json.loads(result.stdout)
+
+            # The structure often puts notes in fields or at the top level depending on version/item type
+            # But the requirement specifically asked for fields -> notesPlain
+
+            # Search in fields
+            found = False
+            for field in item_data.get("fields", []):
+                if (
+                    field.get("id") == "notesPlain"
+                    or field.get("label") == "notesPlain"
+                ):
+                    ssh_config_content = field.get("value", "")
+                    found = True
+                    break
+
+            if not found:
+                # Fallback: sometimes it's just 'notes' at top level for some item types, but let's stick to request
+                warn("Could not find 'notesPlain' field in the 1Password item.")
+                return
+
+            if not ssh_config_content:
+                warn("SSH config content (notesPlain) is empty.")
+                return
+
+            log("SSH config content extracted successfully.")
+        else:
+            warn(f"Failed to fetch item from 1Password: {result.stderr}")
+            return
+    except json.JSONDecodeError as e:
+        warn(f"Failed to parse 1Password JSON response: {e}")
+        return
+    except Exception as e:
+        warn(f"Error fetching item from 1Password: {e}")
+        return
+
+    # Setup SSH files
+    log("\nStep 2: Setting up ~/.ssh files...")
+    log("-" * 40)
+
+    ssh_dir = Path.home() / ".ssh"
+    config_file = ssh_dir / "config"
+
+    try:
+        # Create directory if it doesn't exist
+        if not ssh_dir.exists():
+            log(f"Creating {ssh_dir}...")
+            ssh_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set directory permissions to 0700 (rwx------)
+        os.chmod(ssh_dir, 0o700)
+        success(f"Ensured {ssh_dir} has 0700 permissions.")
+
+        # Write config file
+        log(f"Writing SSH config to {config_file}...")
+        with open(config_file, "w") as f:
+            f.write(ssh_config_content)
+
+        # Set file permissions to 0600 (rw-------)
+        os.chmod(config_file, 0o600)
+        success("Written SSH config and ensured 0600 permissions.")
+
+    except Exception as e:
+        warn(f"Failed to setup SSH files: {e}")
+        return
+
+    # Prompt user for 1Password SSH Agent
+    log("\nStep 3: Enable SSH Agent in 1Password...")
+    log("-" * 40)
+    log(
+        "To complete the SSH setup, you need to enable the SSH Agent in the 1Password application."
+    )
+    log("1. Open 1Password Settings")
+    log("2. Go to Developer > SSH Agent")
+    log("3. Check 'Use the SSH Agent'")
+    log("")
+
+    wait_for_user_confirmation(
+        "Press Enter when you have enabled the SSH Agent in 1Password..."
+    )
+    success("SSH configuration setup completed!")
 
 
 def ensure_macos_settings() -> None:
@@ -1694,6 +1860,7 @@ def main() -> None:
         ("Interactive application setup", ensure_interactive_application_setup),
         ("OpenVPN setup", ensure_openvpn_setup),
         ("AWS CLI setup", ensure_aws_cli_setup),
+        ("SSH configuration", ensure_ssh_config),
         ("macOS system settings", ensure_macos_settings),
         ("Dock setup", ensure_dock_setup),
         ("Clone development projects", ensure_development_projects),  # use glab

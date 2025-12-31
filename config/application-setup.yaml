@@ -38,3 +38,8 @@ interactive_apps:
     type: "automated"
     onepassword_item_id: "4nhatmmbowfgr5pjzv3wx7xaa4"
 
+  - name: ssh configuration
+    display_name: "ssh config"
+    type: "automated"
+    onepassword_item_id: "t3uionw2uz2n5d3prpgaxiutwy"
+
