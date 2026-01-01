@@ -1043,8 +1043,101 @@ def ensure_ssh_config() -> None:
         warn(f"Failed to setup SSH files: {e}")
         return
 
+    # Fetch SSH keys and configure 1Password SSH Agent
+    log("\nStep 3: Configure 1Password SSH Agent keys...")
+    log("-" * 40)
+
+    # Create 1Password config directory
+    op_ssh_dir = Path.home() / ".config" / "1password" / "ssh"
+    try:
+        if not op_ssh_dir.exists():
+            log(f"Creating {op_ssh_dir}...")
+            op_ssh_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        warn(f"Failed to create directory {op_ssh_dir}: {e}")
+
+    agent_toml_lines = []
+
+    # Fetch all SSH keys
+    log("Fetching list of SSH keys from 1Password...")
+    result = run_command(
+        ["op", "item", "list", "--categories", "SSH Key", "--format", "json"],
+        check=False,
+        capture=True,
+    )
+
+    if result.returncode != 0:
+        warn(f"Failed to list SSH keys: {result.stderr}")
+    else:
+        try:
+            items = json.loads(result.stdout)
+            log(f"Found {len(items)} SSH keys. Processing...")
+
+            for item in items:
+                item_id = item.get("id")
+                vault_id = item.get("vault", {}).get("id")
+                title = item.get("title", "untitled")
+
+                if not item_id or not vault_id:
+                    continue
+
+                # Add to agent.toml content
+                agent_toml_lines.append(f"[[ssh-keys]]")
+                agent_toml_lines.append(f'item = "{item_id}"')
+                agent_toml_lines.append(f'vault = "{vault_id}"')
+                agent_toml_lines.append("")
+
+                # Fetch full item details to get public key
+                detail_result = run_command(
+                    ["op", "item", "get", item_id, "--format", "json"],
+                    check=False,
+                    capture=True,
+                )
+
+                if detail_result.returncode == 0:
+                    try:
+                        details = json.loads(detail_result.stdout)
+                        public_key = None
+
+                        # Look for public key field
+                        for field in details.get("fields", []):
+                            if (
+                                field.get("label") == "public key"
+                                or field.get("id") == "public_key"
+                            ):
+                                public_key = field.get("value")
+                                break
+
+                        if public_key:
+                            # Sanitize filename: replace unsafe chars with underscore
+                            safe_title = re.sub(r'[\\/:*?"<>|]', "_", title)
+                            pub_key_path = ssh_dir / f"{safe_title}.pub"
+
+                            try:
+                                with open(pub_key_path, "w") as f:
+                                    f.write(public_key)
+                                os.chmod(pub_key_path, 0o644)
+                                # success(f"Saved {safe_title}.pub") # Optional: reduce verbosity
+                            except Exception as e:
+                                warn(f"Failed to save public key for '{title}': {e}")
+                    except Exception:
+                        pass  # specific warnings handled by loop flow or ignored to reduce noise
+
+            # Write agent.toml
+            if agent_toml_lines:
+                agent_toml_path = op_ssh_dir / "agent.toml"
+                try:
+                    with open(agent_toml_path, "w") as f:
+                        f.write("\n".join(agent_toml_lines))
+                    success(f"Generated {agent_toml_path} with {len(items)} keys.")
+                except Exception as e:
+                    warn(f"Failed to write agent.toml: {e}")
+
+        except json.JSONDecodeError:
+            warn("Failed to parse SSH key list from 1Password.")
+
     # Prompt user for 1Password SSH Agent
-    log("\nStep 3: Enable SSH Agent in 1Password...")
+    log("\nStep 4: Enable SSH Agent in 1Password...")
     log("-" * 40)
     log(
         "To complete the SSH setup, you need to enable the SSH Agent in the 1Password application."
@@ -2033,7 +2126,7 @@ def main() -> None:
         # ("Interactive application setup", ensure_interactive_application_setup),
         # ("OpenVPN setup", ensure_openvpn_setup),
         # ("AWS CLI setup", ensure_aws_cli_setup),
-        # ("SSH configuration", ensure_ssh_config),
+        ("SSH configuration", ensure_ssh_config),
         # ("macOS system settings", ensure_macos_settings),
         # ("Dock setup", ensure_dock_setup),
         ("Clone development projects", ensure_development_projects),  # use glab
