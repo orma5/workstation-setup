@@ -2119,16 +2119,16 @@ def main() -> None:
 
     # Run setup steps with error handling to ensure all steps are attempted
     steps = [
-        # ("Homebrew applications", ensure_homebrew_applications),
-        # ("Folders", ensure_folders),
-        # ("Git configuration", ensure_git_config),
-        # ("1Password sign-in", ensure_1password_signin),
-        # ("Interactive application setup", ensure_interactive_application_setup),
-        # ("OpenVPN setup", ensure_openvpn_setup),
-        # ("AWS CLI setup", ensure_aws_cli_setup),
+        ("Homebrew applications", ensure_homebrew_applications),
+        ("Folders", ensure_folders),
+        ("Git configuration", ensure_git_config),
+        ("1Password sign-in", ensure_1password_signin),
+        ("Interactive application setup", ensure_interactive_application_setup),
+        ("OpenVPN setup", ensure_openvpn_setup),
+        ("AWS CLI setup", ensure_aws_cli_setup),
         ("SSH configuration", ensure_ssh_config),
-        # ("macOS system settings", ensure_macos_settings),
-        # ("Dock setup", ensure_dock_setup),
+        ("macOS system settings", ensure_macos_settings),
+        ("Dock setup", ensure_dock_setup),
         ("Clone development projects", ensure_development_projects),  # use glab
         (
             "Setup Python development environments",
