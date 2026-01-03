@@ -1875,22 +1875,24 @@ def ensure_development_projects() -> None:
     # Authenticate glab
     log("\nStep 2: Authenticating glab CLI...")
     try:
-        # We use --protocol ssh to satisfy the user's requirement and avoid interactive prompts
-        # that would conflict with the piped stdin token.
-        auth_cmd = subprocess.run(
+        # glab auth login --hostname <hostname> -a <hostname> -p http -g ssh -t <access_token>
+        auth_cmd = run_command(
             [
                 "glab",
                 "auth",
                 "login",
                 "--hostname",
                 hostname,
-                "--stdin",
-                "--git-protocol",
+                "--token",
+                access_token,
+                "-a",
+                hostname,
+                "-p",
+                "http",
+                "-g",
                 "ssh",
             ],
-            input=access_token,
-            capture_output=True,
-            text=True,
+            capture=True,
             check=False,
         )
 
@@ -1907,6 +1909,13 @@ def ensure_development_projects() -> None:
     log("\nStep 3: Fetching repository list...")
     repos = []
     try:
+        # configure glab to use hostname as host
+        run_command(
+            ["glab", "config", "-g", "set", "host", hostname],
+            check=True,
+            capture=False,
+        )
+
         # glab repo list -a -g bo -P 100 -F json
         result = run_command(
             ["glab", "repo", "list", "-a", "-g", "bo", "-P", "100", "-F", "json"],
@@ -2084,10 +2093,16 @@ def ensure_terminal_configuration() -> None:
 
     if not color_scheme_path.exists():
         try:
-            run_command([
-                "curl", "-fsSL", "-o", str(color_scheme_path),
-                "https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/MaterialDesignColors.itermcolors"
-            ], check=True)
+            run_command(
+                [
+                    "curl",
+                    "-fsSL",
+                    "-o",
+                    str(color_scheme_path),
+                    "https://raw.githubusercontent.com/MartinSeeler/iterm2-material-design/master/material-design-colors.itermcolors",
+                ],
+                check=True,
+            )
             success(f"Downloaded color scheme to {color_scheme_path}")
         except Exception as e:
             warn(f"Failed to download color scheme: {e}")
@@ -2135,8 +2150,6 @@ def main() -> None:
             ensure_python_development_environments,
         ),  # use uv
         ("Configure terminal", ensure_terminal_configuration),
-        # setup ssh config and download config
-        # download wireguard config from 1password
         # gcloud setup
     ]
 
