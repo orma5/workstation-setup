@@ -1985,35 +1985,35 @@ def ensure_development_projects() -> None:
     )
 
 
-def ensure_python_development_environments() -> None:
+def ensure_development_environments() -> None:
     """
-    Ensure Python development environments are set up.
+    Ensure Development environments are set up.
     This is a manual placeholder function that prompts the user to perform the step.
     """
-    log("Ensuring Python development environments are set up...")
+    log("Ensuring Development environments are set up...")
 
     # Check if running in an interactive terminal
     if not sys.stdin.isatty():
-        warn("Not running in an interactive terminal. Skipping Python development environments setup.")
-        warn("Please set up your Python development environments manually.")
+        warn(
+            "Not running in an interactive terminal. Skipping Development environments setup."
+        )
+        warn("Please set up your Development environments manually.")
         return
 
     log("\n" + "="*60)
-    log("Manual Step: Setup Python Development Environments")
+    log("Manual Step: Setup Development Environments")
     log("="*60)
-    log("Please set up your Python development environments for your projects.")
+    log("Please set up your Development environments for your projects.")
+    log(
+        "This may include installing SDKs, configuring IDEs, setting up virtual environments, etc."
+    )
+    log("Refer to your project documentation for specific requirements.")
     log("")
-    log("Example steps:")
-    log("  1. Navigate to each Python project directory")
-    log("  2. Create virtual environments: python -m venv venv")
-    log("  3. Activate virtual environments: source venv/bin/activate")
-    log("  4. Install dependencies: pip install -r requirements.txt")
-    log("  5. Configure IDE/editor Python interpreters")
-    log("")
-
     # Wait for user to complete the manual step
-    wait_for_user_confirmation("Press Enter when you've set up all Python development environments...")
-    success("Python development environments setup completed.")
+    wait_for_user_confirmation(
+        "Press Enter when you've set up all Development environments..."
+    )
+    success("Development environments setup completed.")
 
 
 def ensure_terminal_configuration() -> None:
@@ -2146,11 +2146,10 @@ def main() -> None:
         ("Dock setup", ensure_dock_setup),
         ("Clone development projects", ensure_development_projects),  # use glab
         (
-            "Setup Python development environments",
-            ensure_python_development_environments,
+            "Setup Development environments",
+            ensure_development_environments,
         ),  # use uv
         ("Configure terminal", ensure_terminal_configuration),
-        # gcloud setup
     ]
 
 
