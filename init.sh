@@ -85,9 +85,26 @@ download_setup_files() {
     # Create temp directory structure
     mkdir -p "$TEMP_DIR/config"
     mkdir -p "$TEMP_DIR/dotfiles"
+    mkdir -p "$TEMP_DIR/tasks"
 
-    # Download main.py
+    # Download main scripts
     download_file "$GITHUB_RAW_BASE/main.py" "$TEMP_DIR/main.py"
+    download_file "$GITHUB_RAW_BASE/utils.py" "$TEMP_DIR/utils.py"
+
+    # Download tasks
+    download_file "$GITHUB_RAW_BASE/tasks/__init__.py" "$TEMP_DIR/tasks/__init__.py"
+    download_file "$GITHUB_RAW_BASE/tasks/aws.py" "$TEMP_DIR/tasks/aws.py"
+    download_file "$GITHUB_RAW_BASE/tasks/development.py" "$TEMP_DIR/tasks/development.py"
+    download_file "$GITHUB_RAW_BASE/tasks/dock.py" "$TEMP_DIR/tasks/dock.py"
+    download_file "$GITHUB_RAW_BASE/tasks/folders.py" "$TEMP_DIR/tasks/folders.py"
+    download_file "$GITHUB_RAW_BASE/tasks/git.py" "$TEMP_DIR/tasks/git.py"
+    download_file "$GITHUB_RAW_BASE/tasks/homebrew.py" "$TEMP_DIR/tasks/homebrew.py"
+    download_file "$GITHUB_RAW_BASE/tasks/interactive.py" "$TEMP_DIR/tasks/interactive.py"
+    download_file "$GITHUB_RAW_BASE/tasks/macos.py" "$TEMP_DIR/tasks/macos.py"
+    download_file "$GITHUB_RAW_BASE/tasks/onepassword.py" "$TEMP_DIR/tasks/onepassword.py"
+    download_file "$GITHUB_RAW_BASE/tasks/openvpn.py" "$TEMP_DIR/tasks/openvpn.py"
+    download_file "$GITHUB_RAW_BASE/tasks/ssh.py" "$TEMP_DIR/tasks/ssh.py"
+    download_file "$GITHUB_RAW_BASE/tasks/terminal.py" "$TEMP_DIR/tasks/terminal.py"
 
     # Download config files
     download_file "$GITHUB_RAW_BASE/config/applications.yaml" "$TEMP_DIR/config/applications.yaml"
