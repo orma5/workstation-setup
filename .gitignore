@@ -127,8 +127,9 @@ credentials.*
 *.bak
 *.tmp
 
-# claude
-.claude
+# claude — ignore local session data but track project settings
+.claude/todos/
+.claude/local/
 
 # =========================
 # Mac / Linux caches

@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew:*)",
+      "Bash(defaults:*)",
+      "Bash(dockutil:*)",
+      "Bash(git:*)",
+      "Bash(glab:*)",
+      "Bash(aws:*)",
+      "Bash(kubectl:*)",
+      "Bash(open:*)",
+      "Bash(killall:Dock)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(chflags:*)",
+      "Bash(xattr:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(which:*)",
+      "Bash(mdfind:*)",
+      "Bash(sh:*)",
+      "Bash(npx:*)",
+      "Bash(launchctl:*)",
+      "Bash(pmset:*)",
+      "Bash(systemsetup:*)",
+      "Bash(xcode-select:*)",
+      "mcp__1password__*"
+    ]
+  }
+}
